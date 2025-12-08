@@ -2236,6 +2236,292 @@ DriverInstance();
 
 ---
 
+# PLC / TwinCAT — **Machine State (State Machine) Singleton Tasarımı**
+**Kayıpsız içerik – Markdown dokümanı**
+
+---
+
+## 1. PLC’de State Machine ne yapar?
+
+State machine, makinenin üst seviye çalışma modlarını yönetir:
+
+- **OFF / PowerUp**
+- **INIT**
+- **IDLE**
+- **START / RUN**
+- **PAUSE**
+- **STOP**
+- **ERROR / ESTOP / RECOVERY**
+
+Bu state machine:
+
+- Start / Stop / Reset butonlarını yorumlar
+- Safety durumlarını kontrol eder
+- Alt proses FB’lerinin *ne zaman çalışacağını / duracağını* belirler
+- HMI’de görünen “Makine Durumu”nun tek kaynağıdır
+
+Kısaca:
+
+> **Makinenin ana kontrol akışı (beyni)** state machine’dir.
+
+---
+
+## 2. Neden Singleton olmalı?
+
+Çünkü:
+
+- Bir makinenin **aynı anda iki ana durumu** olamaz  
+  Örnek: Hem RUN hem ERROR aynı anda mantıksızdır.
+- Birden fazla modülde *ayrı state machine’ler* olursa:
+  - A FB’si “IDLE” derken B FB’si “RUN” zannedebilir
+  - HMI tutarsız durum gösterir
+  - Start/Stop/Reset davranışları bozulur
+
+Doğru çözüm:
+
+> **Makinenin resmi çalışma durumu tek bir merkezden yönetilmelidir.**
+
+Bu, Singleton yaklaşımı ile bire bir aynıdır.
+
+---
+
+## 3. Mimari – TwinCAT’te Machine State Singleton Yapısı
+
+Temel yapı:
+
+- `E_MachineState` → Makine durum enum’u  
+- `FB_MachineState` → Durum geçişlerini yöneten FB  
+- `g_MachineState` → GVL’de tek instance  
+- `MachineStateInstance()` → C#’taki `MachineState.Instance` karşılığı  
+- Alt modüller → Çalışma/durma kararlarını bu state’e göre verir  
+
+---
+
+## 4. Makine Durum Enum’u
+
+```iecst
+TYPE E_MachineState :
+(
+    MS_OFF := 0,
+    MS_INIT,
+    MS_IDLE,
+    MS_STARTING,
+    MS_RUNNING,
+    MS_STOPPING,
+    MS_ERROR
+);
+END_TYPE
+```
+
+---
+
+## 5. State Machine FB — `FB_MachineState`
+
+```iecst
+FUNCTION_BLOCK FB_MachineState
+VAR_INPUT
+    bCmdStart   : BOOL;    // HMI Start butonu
+    bCmdStop    : BOOL;    // HMI Stop butonu
+    bCmdReset   : BOOL;    // HMI Reset
+    bSafetyOk   : BOOL;    // Kapak, estop, safety hattı
+END_VAR
+VAR_OUTPUT
+    eState        : E_MachineState;
+    bAllowMotion  : BOOL;     // Motion FB’lere izin
+    bAllowProcess : BOOL;     // Proses FB’lere izin
+    bErrorLatched : BOOL;     // Hata latched
+END_VAR
+VAR
+    eNextState : E_MachineState;
+    tStateTimer : TON;
+END_VAR
+```
+
+---
+
+## 5.1. Cyclic metodunda state machine mantığı
+
+```iecst
+METHOD PUBLIC Cyclic
+CASE eState OF
+
+    MS_OFF:
+        eNextState := MS_INIT;
+
+    MS_INIT:
+        IF bSafetyOk THEN
+            eNextState := MS_IDLE;
+        ELSE
+            eNextState := MS_ERROR;
+        END_IF
+
+    MS_IDLE:
+        bAllowMotion  := FALSE;
+        bAllowProcess := FALSE;
+
+        IF NOT bSafetyOk THEN
+            eNextState := MS_ERROR;
+        ELSIF bCmdStart THEN
+            eNextState := MS_STARTING;
+        END_IF
+
+    MS_STARTING:
+        tStateTimer(IN := TRUE, PT := T#2S);
+        IF NOT bSafetyOk THEN
+            eNextState := MS_ERROR;
+        ELSIF tStateTimer.Q THEN
+            eNextState := MS_RUNNING;
+        END_IF
+
+    MS_RUNNING:
+        bAllowMotion  := TRUE;
+        bAllowProcess := TRUE;
+
+        IF NOT bSafetyOk THEN
+            eNextState := MS_ERROR;
+        ELSIF bCmdStop THEN
+            eNextState := MS_STOPPING;
+        END_IF
+
+    MS_STOPPING:
+        bAllowProcess := FALSE;
+        tStateTimer(IN := TRUE, PT := T#1S);
+        IF tStateTimer.Q THEN
+            eNextState := MS_IDLE;
+        END_IF
+
+    MS_ERROR:
+        bAllowMotion  := FALSE;
+        bAllowProcess := FALSE;
+        bErrorLatched := TRUE;
+
+        IF bCmdReset AND bSafetyOk THEN
+            bErrorLatched := FALSE;
+            eNextState := MS_IDLE;
+        END_IF
+
+END_CASE;
+
+eState := eNextState;
+```
+
+Bu state machine:
+
+- Makine davranışını *tamamen belirleyen resmî kaynak* olur.
+- Tüm modüller bu state’e göre hareket eder.
+
+---
+
+## 6. Global Singleton Instance
+
+```iecst
+// GVL_State.TcGVL
+VAR_GLOBAL
+    g_MachineState : FB_MachineState;
+END_VAR
+```
+
+---
+
+## 7. Accessor Function (Singleton erişimi)
+
+```iecst
+FUNCTION MachineStateInstance : REFERENCE TO FB_MachineState
+MachineStateInstance REF= g_MachineState;
+```
+
+Artık her yerden:
+
+```iecst
+MachineStateInstance().eState
+MachineStateInstance().bAllowMotion
+MachineStateInstance().bAllowProcess
+```
+
+ile tek bir makine state’i okunur.
+
+---
+
+## 8. Diğer FB’ler state machine’i nasıl kullanır?
+
+---
+
+### 8.1. Motion / Axis FB
+
+```iecst
+FUNCTION_BLOCK FB_AxisHandler
+VAR
+    bMotionEnabled : BOOL;
+END_VAR
+
+METHOD PUBLIC Cyclic
+bMotionEnabled := MachineStateInstance().bAllowMotion;
+
+IF bMotionEnabled THEN
+    // Motion çalışabilir
+ELSE
+    // Motion durmalı / hold edilmeli
+END_IF
+END_METHOD
+```
+
+---
+
+### 8.2. Process (Dolum / Paketleme / Tartım)
+
+```iecst
+FUNCTION_BLOCK FB_Process
+VAR
+    bProcessEnabled : BOOL;
+END_VAR
+
+METHOD PUBLIC Cyclic
+bProcessEnabled := MachineStateInstance().bAllowProcess;
+
+IF bProcessEnabled THEN
+    // Normal proses
+ELSE
+    // Bekleme / durdurma
+END_IF
+END_METHOD
+```
+
+---
+
+## 8.3. HMI – Makine durumunu göstermek
+
+```iecst
+PROGRAM PLC_HmiState
+VAR
+    eStateHmi        : E_MachineState;
+    bErrorLatchedHmi : BOOL;
+END_VAR
+
+eStateHmi        := MachineStateInstance().eState;
+bErrorLatchedHmi := MachineStateInstance().bErrorLatched;
+```
+
+HMI renk/ikon değişimlerini buna göre yönetir.
+
+---
+
+## 9. Özet — State Machine + Singleton
+
+Makinenin global durumu:
+
+- **Tek bir FB ile yönetilmelidir → FB_MachineState**
+- **Bu FB’nin tek örneği olmalıdır → g_MachineState**
+- **Herkes aynı kaynaktan state okumalıdır → MachineStateInstance()**
+
+Bunun avantajları:
+
+✔ Tüm modüller tutarlı çalışır  
+✔ HMI tek bir doğru kaynağa bakar  
+✔ Start/Stop/Reset davranışı deterministik olur  
+✔ Safety ve hata mantığı merkezi yönetilir  
+✔ Debug ve bakım çok daha kolaylaşır  
+
+---
 
 
 
