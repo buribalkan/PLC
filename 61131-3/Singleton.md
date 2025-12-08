@@ -92,8 +92,8 @@ Burada önemli nokta:
 
 Bazı sınıfların tekil olması gerekir:
 
--   Tek bir config yöneticisi\
--   Tek bir database bağlantısı\
+-   Tek bir config yöneticisi
+-   Tek bir database bağlantısı
 -   Tek bir donanım sürücü yöneticisi
 
 İşte Singleton burada devreye girer:
@@ -170,7 +170,7 @@ Logger.Instance.Log("Mesaj B");
 ### Çalışma mantığı:
 
 -   İlk çağrıda `_instance == null` → `new Logger()` → örnek
-    oluşturulur\
+    oluşturulur
 -   Sonraki çağrılarda yeni örnek oluşturulmaz → hep aynı döner
 
 ------------------------------------------------------------------------
@@ -221,8 +221,8 @@ public sealed class Logger
 }
 ```
 
--   Program başlarken **bir kere** oluşturulur\
--   Sonra her çağrıda aynı instance döner\
+-   Program başlarken **bir kere** oluşturulur
+-   Sonra her çağrıda aynı instance döner
 -   Thread-safe ve basittir
 
 ------------------------------------------------------------------------
@@ -288,8 +288,8 @@ public class Logger
 
 Bu yapı şunu sağlar:
 
--   Constructor **private** → kimse new yapamaz\
--   `_instance` **static** → tek örnek saklanır\
+-   Constructor **private** → kimse new yapamaz
+-   `_instance` **static** → tek örnek saklanır
 -   `Instance` property → herkes aynı nesneyi alır
 
 ------------------------------------------------------------------------
@@ -298,7 +298,7 @@ Bu yapı şunu sağlar:
 
 Çünkü:
 
--   TwinCAT'te **private constructor yok**\
+-   TwinCAT'te **private constructor yok**
 -   TwinCAT'te **static class member** tam C#'taki gibi yok
 
 Ama fikir aynı olabilir:
@@ -531,8 +531,8 @@ g_LoggerSingleton.GetInstance()
 TwinCAT'in kısıtlarına rağmen, **C# Singleton'ın mantığı bire bir
 uygulanmış oluyor**:
 
--   Tek örnek ✔\
--   Global erişim ✔\
+-   Tek örnek ✔
+-   Global erişim ✔
 -   Tüm kod aynı tek FB üzerinden çalışıyor ✔
 
 
@@ -551,18 +551,18 @@ sade, net ve profesyonel şekilde listeliyorum.
 
 PLC'de loglama çoğu zaman sistem geneldir:
 
--   Alarmlar, uyarılar\
--   Durum değişimleri\
--   Proses hataları\
+-   Alarmlar, uyarılar
+-   Durum değişimleri
+-   Proses hataları
 -   Debug mesajları
 
 Eğer her FB kendi logger'ını oluştursa:
 
--   RAM ziyan olur\
--   Log yapısı dağılır\
+-   RAM ziyan olur
+-   Log yapısı dağılır
 -   Mesajlar karışır
 
-Bu yüzden **tek bir Logger FB (singleton)** kullanılır.\
+Bu yüzden **tek bir Logger FB (singleton)** kullanılır.
 Sistemdeki tüm FB'ler **aynı logger üzerinden** log yazar.
 
 ------------------------------------------------------------------------
@@ -571,9 +571,9 @@ Sistemdeki tüm FB'ler **aynı logger üzerinden** log yazar.
 
 Bir makinenin:
 
--   Reçete ayarları\
--   Hız limitleri\
--   Güvenlik parametreleri\
+-   Reçete ayarları
+-   Hız limitleri
+-   Güvenlik parametreleri
 -   Kalibrasyon değerleri
 
 genellikle tek merkezde saklanır.
@@ -591,20 +591,20 @@ yazılır**.
 
 PLC'nin dış sistemlerle konuşan FB'leri:
 
--   SQL client\
--   MQTT client\
--   REST API client\
--   ADS client\
--   OPC UA client\
+-   SQL client
+-   MQTT client
+-   REST API client
+-   ADS client
+-   OPC UA client
 -   SQLite FB
 
 Bu tür FB'ler sadece **bir kez** çalışmalıdır.
 
 Aksi takdirde:
 
--   Port çakışması\
--   Çift bağlantı açma\
--   Mesaj karışması\
+-   Port çakışması
+-   Çift bağlantı açma
+-   Mesaj karışması
 -   Kimlik doğrulama sorunları
 
 oluşur.
@@ -618,17 +618,17 @@ kullanılmalıdır.
 
 Cihazlarla konuşan FB'ler ikinci kez örneklenemez:
 
--   RS485/RS232 sürücüsü\
--   EtherCAT özel terminal sürücüleri\
--   Modbus Master\
--   RFID okuyucu\
--   CANbus driver\
+-   RS485/RS232 sürücüsü
+-   EtherCAT özel terminal sürücüleri
+-   Modbus Master
+-   RFID okuyucu
+-   CANbus driver
 -   Servo/robot kontrol FB'leri
 
 İki instance kullanılmaya çalışılırsa:
 
--   Aynı port iki kez açılır → **hata**\
--   Frame çakışır → **mesaj bozulur**\
+-   Aynı port iki kez açılır → **hata**
+-   Frame çakışır → **mesaj bozulur**
 -   Cihaz cevap vermez
 
 Bu FB'ler **zaten doğal singleton** gibidir.
@@ -639,14 +639,14 @@ Bu FB'ler **zaten doğal singleton** gibidir.
 
 PLC'de alarm yönetimi typik olarak **merkezi** çalışır:
 
--   Tüm FB'ler alarm gönderir\
--   Alarm yöneticisi tek noktadır\
+-   Tüm FB'ler alarm gönderir
+-   Alarm yöneticisi tek noktadır
 -   HMI tek bir alarm kaynağına bağlanır
 
 Bu nedenle:
 
--   AlarmTable\
--   ErrorManager\
+-   AlarmTable
+-   ErrorManager
 -   EventLogger
 
 gibi yapılar **tek instance** tutulur.
@@ -657,12 +657,12 @@ gibi yapılar **tek instance** tutulur.
 
 Bir makinede genellikle:
 
--   Tüm makineyi yöneten **bir master state machine** bulunur\
+-   Tüm makineyi yöneten **bir master state machine** bulunur
 -   Alt modüller bu FSM ile haberleşir
 
 Makine:
 
--   Aynı anda iki farklı "RUN" durumunda olamaz\
+-   Aynı anda iki farklı "RUN" durumunda olamaz
 -   İki state machine işletmek kontrol kaosuna yol açar
 
 Bu yüzden FSM'ler genellikle **singleton** olur.
@@ -673,7 +673,7 @@ Bu yüzden FSM'ler genellikle **singleton** olur.
 
 Üretim makinelerinde:
 
--   Reçete **bir kez** yüklenir\
+-   Reçete **bir kez** yüklenir
 -   Tüm FB'ler bu reçeteyi okur
 
 Dolayısıyla tek merkez zorunludur → Singleton.
@@ -684,7 +684,7 @@ Dolayısıyla tek merkez zorunludur → Singleton.
 
 PLC'nin üst sisteme heartbeat göndermesi için:
 
--   Tek bir yönetici FB gerekir\
+-   Tek bir yönetici FB gerekir
 -   Bunu iki kez çalıştırmak yanlış süre ölçümüne neden olur
 
 Bu FB her yere konulmaz → **bir tane** olur.
@@ -695,8 +695,8 @@ Bu FB her yere konulmaz → **bir tane** olur.
 
 TwinCAT zamanı sistemden alır ama özel ihtiyaçlar için:
 
--   Cycle time hesaplayıcı\
--   Makine çalışma süresi\
+-   Cycle time hesaplayıcı
+-   Makine çalışma süresi
 -   Özel zaman motoru
 
 gibi FB'ler tek instance kullanılabilir.
@@ -707,8 +707,8 @@ gibi FB'ler tek instance kullanılabilir.
 
 Makinede güvenlik ve kullanıcı izinleri genellikle merkezidir:
 
--   User access level (Login/Logout)\
--   Operatör / mühendis / admin hak kontrolü\
+-   User access level (Login/Logout)
+-   Operatör / mühendis / admin hak kontrolü
 -   Safety door FB'leri
 
 Bu tür sistemler **tek merkezden yönetilir** → Singleton yapısı ideal
