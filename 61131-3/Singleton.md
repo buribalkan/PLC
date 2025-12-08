@@ -2728,45 +2728,44 @@ Aynı makinede State Machine, Alarm Manager ve Hardware Driver Singleton iken Re
 ---
 
 Cevaplar
-1.
-Singleton’ın amacı, bir sınıfın veya FB’nin tek bir örneğini oluşturmak ve tüm sistemin bu tek örneğe erişmesini sağlamaktır.
-2.
-RS485 donanımı fiziksel olarak tektir; iki farklı FB aynı anda portu açmaya çalışırsa çakışma, timeout ve iletişim bozulması ortaya çıkar.
-3.
-Makinedeki tüm modüller aynı ürün parametrelerini kullanmalıdır; birden fazla recipe kaynağı olursa değerler tutarsız olur ve proses davranışı bozulur.
-4.
-Deterministik sistemlerde aynı giriş her zaman aynı sonucu üretir; yani belirsizlik ve rastgelelik yoktur.
-5.
-Hayır. Heuristik yöntemler hızlı ve pratik çözümler üretir ancak kesin doğruyu garanti etmez; yalnızca “yaklaşık olarak iyi” sonuç verir.
-6.
-Eğer birden fazla Alarm Manager olursa: Alarmlar farklı listelere yazılır, HMI hangi listeyi göstermesi gerektiğini bilemez ve sistem tamamen tutarsız olur.
-7.
-Config Manager tek olmazsa farklı modüller farklı ayar değerleri görür. Bu durum makinenin davranışını tutarsız hâle getirir ve bakım süreçlerini zorlaştırır.
-8.
-State machine tek merkezden yönetilmezse bir modül RUN durumundayken diğeri STOP veya ERROR durumunda olabilir; makine kaotik davranır.
-9.
-Deterministik sistemler kesin sonuç üretir. Stokastik sistemler ise olasılıksal davranır ve sonuçlar rastlantısaldır.
-10.
-Prognostik: “Ne zaman arıza olacak?” veya “Bileşenin ömrü ne kadar kaldı?”  
+1. Singleton’ın amacı, bir sınıfın veya FB’nin tek bir örneğini oluşturmak ve tüm sistemin bu tek örneğe erişmesini sağlamaktır.
+   
+2. RS485 donanımı fiziksel olarak tektir; iki farklı FB aynı anda portu açmaya çalışırsa çakışma, timeout ve iletişim bozulması ortaya çıkar.
+
+3. Makinedeki tüm modüller aynı ürün parametrelerini kullanmalıdır; birden fazla recipe kaynağı olursa değerler tutarsız olur ve proses davranışı bozulur.
+
+4. Deterministik sistemlerde aynı giriş her zaman aynı sonucu üretir; yani belirsizlik ve rastgelelik yoktur.
+
+5. Hayır. Heuristik yöntemler hızlı ve pratik çözümler üretir ancak kesin doğruyu garanti etmez; yalnızca “yaklaşık olarak iyi” sonuç verir.
+
+6. Eğer birden fazla Alarm Manager olursa: Alarmlar farklı listelere yazılır, HMI hangi listeyi göstermesi gerektiğini bilemez ve sistem tamamen tutarsız olur.
+
+7. Config Manager tek olmazsa farklı modüller farklı ayar değerleri görür. Bu durum makinenin davranışını tutarsız hâle getirir ve bakım süreçlerini zorlaştırır.
+
+8. State machine tek merkezden yönetilmezse bir modül RUN durumundayken diğeri STOP veya ERROR durumunda olabilir; makine kaotik davranır.
+
+9. Deterministik sistemler kesin sonuç üretir. Stokastik sistemler ise olasılıksal davranır ve sonuçlar rastlantısaldır.
+
+10. Prognostik: “Ne zaman arıza olacak?” veya “Bileşenin ömrü ne kadar kaldı?”  
 Preskriptif: “Ne yapılmalı?”, “En iyi aksiyon nedir?” sorularını yanıtlar.
-11.
-Singleton kullanılmazsa oluşabilecek tipik sorunlar:
+
+11. Singleton kullanılmazsa oluşabilecek tipik sorunlar:
 ⦁	Alarmlar farklı listelere yazılır → HMI tutarsız gösterir
 ⦁	Recipe farklı FB’lerde farklı görünür → proses karışır
 ⦁	State Machine farklı FB’lerde farklı durur → kontrol deterministik olmaz
-12.
-Donanım driver’ı Singleton olmazsa ortaya çıkabilecek iletişim sorunları:
+
+12. Donanım driver’ı Singleton olmazsa ortaya çıkabilecek iletişim sorunları:
 ⦁	Frame çarpışmaları
 ⦁	CRC hataları
 ⦁	Donanımın yanıt vermemesi
 ⦁	Timeout ve jitter kaynaklı zamanlama bozulmaları
-13.
-PLC gerçek zamanlıdır; belirsiz (non-deterministic) geçişlere izin verilirse PLC’nin davranışı öngörülemez hâle gelir ve kontrol güvenilirliğini kaybeder.
-14.
-Prognostik: arıza zamanını tahmin eder.  
+
+13. PLC gerçek zamanlıdır; belirsiz (non-deterministic) geçişlere izin verilirse PLC’nin davranışı öngörülemez hâle gelir ve kontrol güvenilirliğini kaybeder.
+
+14. Prognostik: arıza zamanını tahmin eder.  
 Diagnostik: mevcut arızanın nedenini belirler.  
 Singleton olmazsa her FB farklı veri tutar → veri uyumsuzluğu ortaya çıkar.
-15.
-Recipe Manager tek olmazsa farklı FB’ler farklı recipe parametrelerini görür. Bu durum proses modüllerinin farklı değerlerle çalışmasına ve üretim tutarsızlığına yol açar.
 
+15. Recipe Manager tek olmazsa farklı FB’ler farklı recipe parametrelerini görür. Bu durum proses modüllerinin farklı değerlerle çalışmasına ve üretim tutarsızlığına yol açar.
 
+-----------------
