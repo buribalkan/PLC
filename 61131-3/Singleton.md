@@ -1117,5 +1117,209 @@ END_VAR
 → *Global instance + accessor function + FB içinde iş mantığı*
 
 
+--------------------------------------------------------------------------------
+
+
+# PLC / TwinCAT – Singleton Network/Database Client Tasarımı  
+**Port/bağlantı çakışmasını engellemek için mimari yaklaşım**
+
+---
+
+## 1. Problem: Aynı kaynağa birden fazla client FB
+
+PLC tarafında “client” dediğimiz şeyler genelde:
+
+- TCP/UDP client (SCADA/PC/veritabanı)
+- Modbus TCP Master
+- MQTT Client
+- HTTP/REST Client
+- SQL/ODBC Client
+- Seri port sürücüsü (RS232/RS485)
+
+Hepsinin ortak özelliği:
+
+- Aynı IP:Port
+- Aynı seri port
+- Aynı fieldbus kanalı
+
+üzerinden iletişim kurmasıdır. **Birden fazla FB instance’ı aynı kaynağı açmaya çalışırsa çakışma olur.**
+
+### Tipik sorunlar:
+- Bir FB bağlanır, diğeri *“port already in use”* hatası alır.
+- Aynı soketten gelen data iki FB tarafından sahiplenilir → protokol bozulur.
+- Seri port iki kere açılır → timeout & random hatalar.
+- Aynı DB bağlantısına birden fazla FB girer → transaction karmaşası.
+
+**Çözüm:**  
+Kaynağı yöneten yalnızca **tek bir global FB** olmalı → *Singleton Client*.
+
+---
+
+## 2. Çözüm: Client FB’yi Singleton yapmak
+
+PC tarafındaki:
+
+```
+DatabaseClient.Instance
+```
+
+kavramının PLC eşdeğeri:
+
+- Tek bir global instance
+- Herkes o instance’a referans ile erişir
+- Connect/Disconnect tek noktadan yapılır
+
+Avantaj:
+
+- Aynı portu iki kez açamazsın → çakışma önlenir.
+- Hata & retry yönetimi merkezi olur.
+- Tüm veri trafiği kontrol altında olur.
+
+---
+
+## 3. TwinCAT – TCP Client Singleton Örneği
+
+### 3.1 Client FB
+
+```iecst
+FUNCTION_BLOCK FB_NetClient
+VAR
+    sIpAddress  : STRING(15) := '192.168.0.10';
+    nPort       : UINT := 502;
+
+    bConnected  : BOOL;
+    bBusy       : BOOL;
+    bError      : BOOL;
+    nErrId      : UDINT;
+
+    fbTcpClient : FB_TcpClient;  // temsilî
+END_VAR
+
+METHOD PUBLIC Connect
+VAR_INPUT
+    sIp  : STRING;
+    port : UINT;
+END_VAR
+    sIpAddress := sIp;
+    nPort      := port;
+
+    IF NOT bConnected THEN
+        bConnected := TRUE; // örnek
+    END_IF
+END_METHOD
+
+METHOD PUBLIC Disconnect
+VAR
+END_VAR
+    IF bConnected THEN
+        bConnected := FALSE;
+    END_IF
+END_METHOD
+
+METHOD PUBLIC Send
+VAR_INPUT
+    pData : POINTER TO BYTE;
+    nSize : UDINT;
+END_VAR
+    IF NOT bConnected THEN
+        bError := TRUE;
+        nErrId := 16#0001;
+        RETURN;
+    END_IF
+END_METHOD
+```
+
+---
+
+## 3.2 Global Singleton Instance
+
+```iecst
+// GVL_Comm.TcGVL
+VAR_GLOBAL
+    g_NetClient : FB_NetClient;
+END_VAR
+```
+
+---
+
+## 3.3 Accessor Function
+
+```iecst
+FUNCTION NetClientInstance : REFERENCE TO FB_NetClient
+NetClientInstance REF= g_NetClient;
+```
+
+Kullanım:
+
+```iecst
+NetClientInstance().Connect('192.168.0.10', 502);
+NetClientInstance().Send(ADR(Buffer), SIZEOF(Buffer));
+```
+
+---
+
+## 4. Port/bağlantı çakışması bu şekilde nasıl engelleniyor?
+
+Örnek FB’ler:
+
+- FB_Robot  
+- FB_VisioSystem  
+- FB_AlarmReporter  
+
+Her biri SCADA’ya TCP ile veri atıyor.
+
+### ❌ Kötü Tasarım
+Her biri kendi FB_TcpClient instance’ını açar → aynı IP/port’a 3 bağlantı denemesi → biri bağlanır, diğerleri hata verir.
+
+### ✔️ İyi Tasarım (Singleton)
+- Tek g_NetClient var
+- Bütün modüller onun üzerinden Send() çağırır
+- Portu sadece *tek yer* açabildiği için çakışma imkansızdır
+
+---
+
+## 5. Database Client için aynı yöntem
+
+Aynı model şu durumlarda uygulanır:
+
+- SQL Client
+- MQTT Client
+- OPC UA Client
+- HTTP/REST Client
+
+### Örnek:
+
+```iecst
+VAR_GLOBAL
+    g_DbClient : FB_DbClient;
+END_VAR
+```
+
+Ve kullanım yine:
+
+```
+DbClientInstance().Query(...)
+```
+
+Sonuç:
+
+- Aynı DB’ye birden fazla bağlantı açılmaz
+- Connection pool tek noktadan yönetilir
+
+---
+
+## 6. PLC açısından özet
+
+Singleton Network/DB Client ne sağlar?
+
+- Aynı IP/port/seri port için **tek sahip**
+- Port/bağlantı çakışması **mimari seviyede engellenir**
+- Retry / timeout / reconnect stratejisi tek merkezden yönetilir
+- Her FB’nin kafasına göre bağlantı açması engellenir
+- Makinede stabilite ve deterministik davranış ciddi yükselir
+
+---
+
+
 
 
