@@ -1322,4 +1322,923 @@ Singleton Network/DB Client ne sağlar?
 
 
 
+# PLC / TwinCAT — **Recipe Manager (Singleton) Tasarımı**  
+**Kayıpsız içerik – Markdown dosyası**
+
+---
+
+## 1. Recipe Manager PLC’de ne işe yarar?
+
+Recipe Manager’ın temel görevi, **ürüne bağlı setpoint’leri ve parametreleri merkezi olarak tutmak** ve tüm makinenin tek bir tarif (recipe) üzerinden çalışmasını sağlamaktır.
+
+Tipik olarak içinde şunlar bulunur:
+
+- Süreler  
+- Sıcaklıklar  
+- Hızlar  
+- Miktarlar  
+- Toleranslar  
+
+HMI üzerinden:
+
+1. Operatör Recipe seçer (Recipe 1, Product A, Job 25…)
+2. PLC, seçilen recipe'nin parametrelerini yükler
+3. Proses FB’leri (dolum, ısıtma, paketleme vb.) bu parametreleri okur
+
+**Kısa özet:**  
+> *“Şu an hangi ürün çalışıyor ve o ürünün parametreleri neler?”*  
+Bu soruyu yanıtlayan **tek merkez**.
+
+### Tek merkez (Singleton) olmasının nedeni:
+- Aynı anda iki farklı aktif recipe istemezsin  
+- Tüm makine **tek kaynaktan** parametre almalı  
+- Tutarsız ürün çalışması engellenir
+
+---
+
+## 2. Recipe Manager vs Config Manager
+
+Aralarındaki fark çok nettir:
+
+| Yapı | Açıklama | Değişim sıklığı |
+|------|----------|------------------|
+| **Config Manager** | Makinenin genel ayarları, güvenlik limitleri, hız limitleri, kalibrasyon değerleri | Nadiren değişir |
+| **Recipe Manager** | Ürüne göre değişen üretim parametreleri | Sık değişir |
+
+Her ikisi de Singleton yapılır, ancak **rolleri tamamen farklıdır**.
+
+---
+
+## 3. TwinCAT’te Recipe Manager Singleton Tasarımı
+
+Aşağıdaki yapı kullanılır:
+
+- **ST_Recipe** → Bir tarifin (product recipe) datası  
+- **FB_RecipeManager** → Tarif listesini, aktif tarifi yöneten FB  
+- **GVL_Recipe** → Tek (global) instance  
+- **RecipeManagerInstance()** → C#’taki `RecipeManager.Instance` karşılığı  
+- Proses FB’leri → Her zaman bu instance üzerinden okur  
+
+---
+
+## 3.1 Recipe Struct (ST_Recipe)
+
+```iecst
+TYPE ST_Recipe :
+STRUCT
+    sName            : STRING(50);
+    rTargetWeight    : REAL;
+    rTolerance       : REAL;
+    tFillTime        : TIME;
+    rConveyorSpeed   : REAL;
+END_STRUCT
+END_TYPE
+```
+
+---
+
+## 3.2 Recipe Manager FB
+
+### Temel FB:
+
+```iecst
+FUNCTION_BLOCK FB_RecipeManager
+VAR
+    aRecipes         : ARRAY[1..20] OF ST_Recipe;
+    nRecipeCount     : INT := 0;
+    nActiveRecipeIdx : INT := 0;
+    bInitialized     : BOOL := FALSE;
+END_VAR
+```
+
+### Init — Default tarifleri yükleme
+
+```iecst
+METHOD PUBLIC Init
+IF NOT bInitialized THEN
+    nRecipeCount := 2;
+
+    aRecipes[1].sName := 'Product A';
+    aRecipes[1].rTargetWeight := 100.0;
+    aRecipes[1].rTolerance := 2.0;
+    aRecipes[1].tFillTime := T#3S;
+    aRecipes[1].rConveyorSpeed := 0.5;
+
+    aRecipes[2].sName := 'Product B';
+    aRecipes[2].rTargetWeight := 250.0;
+    aRecipes[2].rTolerance := 5.0;
+    aRecipes[2].tFillTime := T#5S;
+    aRecipes[2].rConveyorSpeed := 0.8;
+
+    nActiveRecipeIdx := 1;
+    bInitialized := TRUE;
+END_IF
+```
+
+### Recipe seçme (HMI’den)
+
+```iecst
+METHOD PUBLIC SelectRecipe : BOOL
+VAR_INPUT
+    index : INT;
+END_VAR
+
+IF (index >= 1) AND (index <= nRecipeCount) THEN
+    nActiveRecipeIdx := index;
+    SelectRecipe := TRUE;
+ELSE
+    SelectRecipe := FALSE;
+END_IF
+```
+
+### Aktif recipe’i okuma
+
+```iecst
+METHOD PUBLIC GetActiveRecipe : ST_Recipe
+VAR emptyRecipe : ST_Recipe;
+END_VAR
+
+IF (nActiveRecipeIdx >= 1) AND (nActiveRecipeIdx <= nRecipeCount) THEN
+    GetActiveRecipe := aRecipes[nActiveRecipeIdx];
+ELSE
+    GetActiveRecipe := emptyRecipe;
+END_IF
+```
+
+---
+
+## 3.3 Singleton Instance (GVL)
+
+```iecst
+VAR_GLOBAL
+    g_RecipeManager : FB_RecipeManager;
+END_VAR
+```
+
+---
+
+## 3.4 Accessor Function (Instance getter)
+
+```iecst
+FUNCTION RecipeManagerInstance : REFERENCE TO FB_RecipeManager
+RecipeManagerInstance REF= g_RecipeManager;
+```
+
+> TwinCAT için C# `RecipeManager.Instance` karşılığıdır.
+
+---
+
+## 4. Kullanım Senaryoları
+
+### 4.1 PLC Start’ta Init
+
+```iecst
+PROGRAM MAIN
+VAR
+    bInitDone : BOOL := FALSE;
+END_VAR
+
+IF NOT bInitDone THEN
+    RecipeManagerInstance().Init();
+    bInitDone := TRUE;
+END_IF
+```
+
+---
+
+### 4.2 HMI’nin Recipe seçmesi
+
+```iecst
+VAR
+    iSelectedRecipeIndex : INT;
+    bSelectRecipeCmd     : BOOL;
+    bSelectOk            : BOOL;
+END_VAR
+
+IF bSelectRecipeCmd THEN
+    bSelectRecipeCmd := FALSE;
+    bSelectOk := RecipeManagerInstance().SelectRecipe(iSelectedRecipeIndex);
+END_IF
+```
+
+---
+
+### 4.3 Proses FB’lerinin tarifi kullanması
+
+```iecst
+FUNCTION_BLOCK FB_Filler
+VAR
+    stActiveRecipe : ST_Recipe;
+END_VAR
+
+METHOD PUBLIC Cyclic
+    stActiveRecipe := RecipeManagerInstance().GetActiveRecipe();
+    // Process vars:
+    // stActiveRecipe.rTargetWeight
+    // stActiveRecipe.rTolerance
+    // stActiveRecipe.tFillTime
+    // stActiveRecipe.rConveyorSpeed
+END_METHOD
+```
+
+Bu sayede:
+
+- Tüm modüller **aynı recipe’den beslenir**
+- Recipe değişikliği tüm makineye tek noktadan yansır
+- Kontrol algoritmaları tutarlı çalışır
+
+---
+
+## 5. Neden Singleton burada kritik?
+
+### Singleton olmazsa ortaya çıkan problemler:
+- Her FB kendi "aktif recipe"sini tutabilir → çelişki
+- A proses Product A’da, B proses Product B’de kalabilir
+- HMI bir yeri günceller, başka FB’ler eski recipe’de kalır
+- Makinenin durumu belirsizleşir
+
+### Singleton olduğunda:
+- Aktif recipe **tek noktada**
+- Tüm modüller aynı tarife bakar
+- Değişiklikler anında herkes tarafından görülür
+- SCADA / raporlama için sistem tutarlıdır
+
+---
+
+# PLC / TwinCAT — **Alarm Manager (Singleton) Tasarımı**
+**Kayıpsız içerik – Markdown dosyası**
+
+---
+
+## 1. Alarm Manager PLC’de ne yapar?
+
+Alarm Manager, PLC tarafında **tüm alarmların merkezi yönetim noktasıdır**.
+
+Görevleri:
+
+- Sistem ve proses alarmlarını toplamak  
+- Sensör, motor, güvenlik ve iletişim hatalarını alarm mantığına dönüştürmek  
+- Her alarmın:
+  - **ID**
+  - **Mesaj**
+  - **Kaynak (Axis1, Motor3, Filler vb.)**
+  - **Durum (aktif/pasif/acked)**
+  - **Zaman bilgisi** (opsiyonel)
+    gibi özelliklerini saklamak  
+- HMI/SCADA alarm ekranına tek veri kaynağı olmak  
+
+**Kısaca:**  
+> “Makinede şu anda hangi alarmlar var?” sorusunun tek doğru yanıtı bu modüldedir.
+
+Bu nedenle Alarm Manager modülünün *tek bir merkezi kaynak* olması çok kritiktir.
+
+---
+
+## 2. Neden Singleton olmalı?
+
+Eğer Alarm Manager **tekil (singleton)** olmazsa modüller kendi alarm listelerini tutabilir. Bu şu sorunlara yol açar:
+
+### ❌ Singleton olmazsa:
+- HMI aynı anda 5 farklı alarm listesini okumak zorunda kalır  
+- Aynı alarm iki farklı yerde takip edilebilir  
+- Alarm geçmişi toplamak zorlaşır  
+- Ack/clear işlemleri modüller arasında tutarsız olur  
+- “Makinenin alarm durumu nedir?” sorusu cevapsız kalır  
+
+### ✔️ Singleton olduğunda:
+- Bütün alarmlar **tek listede toplanır**
+- HMI sadece **tek listeye** bakar
+- Tüm alarm mantığı **tek yerden** yönetilir (raise/clear/ack)
+- Event log, SQL, CSV kayıtları tek merkezden yapılır
+- Tüm makine için **global HasActiveAlarms()** gibi sorgular mümkün olur
+
+---
+
+## 3. TwinCAT’te Alarm Manager Singleton Mimari
+
+Aşağıdaki yapı önerilir:
+
+- **ST_Alarm** → Alarm verisini tutan struct  
+- **FB_AlarmManager** → Alarm mantığını yöneten FB  
+- **GVL_Alarm** → Global tek instance (`g_AlarmManager`)  
+- **AlarmManagerInstance()** → C#’taki `AlarmManager.Instance` karşılığı  
+- Modüller → Alarm üretmek için sadece bu FB’yi kullanır  
+
+---
+
+## 4. Alarm Struct — ST_Alarm
+
+```iecst
+TYPE ST_Alarm :
+STRUCT
+    nId         : UDINT;         // Alarm ID
+    sSource     : STRING(50);    // Kaynak: "Axis1", "Motor3" vb.
+    sMessage    : STRING(80);    // Alarm açıklaması
+    bActive     : BOOL;          // Aktif mi?
+    bAcked      : BOOL;          // Operator tarafından ack'lenmiş mi?
+END_STRUCT
+END_TYPE
+```
+
+### Alarm ID constant örneği
+```iecst
+VAR_GLOBAL CONSTANT
+    ALARM_ID_MOTOR_OVERCURRENT : UDINT := 1;
+    ALARM_ID_SAFETY_DOOR_OPEN  : UDINT := 2;
+    ALARM_ID_COMM_ERROR        : UDINT := 3;
+END_VAR
+```
+
+---
+
+## 5. Alarm Manager FB — FB_AlarmManager
+
+### Temel yapı
+
+```iecst
+FUNCTION_BLOCK FB_AlarmManager
+VAR
+    aAlarms       : ARRAY[1..100] OF ST_Alarm;
+    nAlarmCount   : INT := 0;
+    bInitialized  : BOOL := FALSE;
+END_VAR
+```
+
+### Init — tüm listeyi temizler
+
+```iecst
+METHOD PUBLIC Init
+VAR i : INT; END_VAR
+IF NOT bInitialized THEN
+    FOR i := 1 TO 100 DO
+        aAlarms[i].nId     := 0;
+        aAlarms[i].sSource := '';
+        aAlarms[i].sMessage:= '';
+        aAlarms[i].bActive := FALSE;
+        aAlarms[i].bAcked  := FALSE;
+    END_FOR
+    nAlarmCount := 0;
+    bInitialized := TRUE;
+END_IF
+```
+
+---
+
+### Yardımcı metod: Alarm ID → index bulma
+
+```iecst
+METHOD PRIVATE FindAlarmIndexById : INT
+VAR_INPUT nId : UDINT; END_VAR
+VAR i : INT; END_VAR
+
+FindAlarmIndexById := 0;
+FOR i := 1 TO nAlarmCount DO
+    IF aAlarms[i].nId = nId THEN
+        FindAlarmIndexById := i;
+        RETURN;
+    END_IF
+END_FOR
+```
+
+---
+
+### Alarm Raise (aktif etme)
+
+```iecst
+METHOD PUBLIC RaiseAlarm
+VAR_INPUT
+    nId      : UDINT;
+    sSource  : STRING;
+    sMessage : STRING;
+END_VAR
+VAR idx : INT; END_VAR
+
+idx := FindAlarmIndexById(nId);
+
+IF idx = 0 THEN
+    IF nAlarmCount < 100 THEN
+        nAlarmCount := nAlarmCount + 1;
+        idx := nAlarmCount;
+
+        aAlarms[idx].nId     := nId;
+        aAlarms[idx].sSource := sSource;
+        aAlarms[idx].sMessage:= sMessage;
+    ELSE
+        RETURN; // liste dolu
+    END_IF
+END_IF
+
+aAlarms[idx].bActive := TRUE;
+aAlarms[idx].bAcked  := FALSE;
+```
+
+---
+
+### Alarm Clear (koşul düzelince)
+
+```iecst
+METHOD PUBLIC ClearAlarm
+VAR_INPUT nId : UDINT; END_VAR
+VAR idx : INT; END_VAR
+
+idx := FindAlarmIndexById(nId);
+
+IF idx <> 0 THEN
+    aAlarms[idx].bActive := FALSE;
+END_IF
+```
+
+---
+
+### Alarm Ack (operator onayı)
+
+```iecst
+METHOD PUBLIC AckAlarm
+VAR_INPUT nId : UDINT; END_VAR
+VAR idx : INT; END_VAR
+
+idx := FindAlarmIndexById(nId);
+
+IF idx <> 0 THEN
+    IF aAlarms[idx].bActive THEN
+        aAlarms[idx].bAcked := TRUE;
+    END_IF
+END_IF
+```
+
+---
+
+### HMI için alarm okuma (index bazlı)
+
+```iecst
+METHOD PUBLIC GetAlarmByIndex : ST_Alarm
+VAR_INPUT index : INT; END_VAR
+VAR emptyAlarm : ST_Alarm; END_VAR
+
+IF (index >= 1) AND (index <= nAlarmCount) THEN
+    GetAlarmByIndex := aAlarms[index];
+ELSE
+    GetAlarmByIndex := emptyAlarm;
+END_IF
+```
+
+---
+
+### Aktif alarm var mı? (global durum kontrolü)
+
+```iecst
+METHOD PUBLIC HasActiveAlarms : BOOL
+VAR i : INT; END_VAR
+
+HasActiveAlarms := FALSE;
+
+FOR i := 1 TO nAlarmCount DO
+    IF aAlarms[i].bActive THEN
+        HasActiveAlarms := TRUE;
+        RETURN;
+    END_IF
+END_FOR
+```
+
+---
+
+## 6. Singleton Yapısı (GVL + Accessor)
+
+### Global instance:
+
+```iecst
+VAR_GLOBAL
+    g_AlarmManager : FB_AlarmManager;
+END_VAR
+```
+
+### Instance getter:
+
+```iecst
+FUNCTION AlarmManagerInstance : REFERENCE TO FB_AlarmManager
+AlarmManagerInstance REF= g_AlarmManager;
+```
+
+Kullanım:
+
+```iecst
+AlarmManagerInstance().RaiseAlarm(...);
+AlarmManagerInstance().ClearAlarm(...);
+AlarmManagerInstance().AckAlarm(...);
+IF AlarmManagerInstance().HasActiveAlarms() THEN ...
+```
+
+**C# karşılığı:**  
+```csharp
+AlarmManager.Instance.RaiseAlarm(...)
+```
+
+---
+
+## 7. Kullanım Örneği – Motor FB Alarm Üretimi
+
+```iecst
+FUNCTION_BLOCK FB_Motor
+VAR_INPUT
+    sName : STRING(20);
+END_VAR
+VAR
+    bOvercurrent : BOOL;
+END_VAR
+
+METHOD PUBLIC Cyclic
+IF bOvercurrent THEN
+    AlarmManagerInstance().RaiseAlarm(
+        nId      := ALARM_ID_MOTOR_OVERCURRENT,
+        sSource  := sName,
+        sMessage := 'Motor overcurrent'
+    );
+ELSE
+    AlarmManagerInstance().ClearAlarm(ALARM_ID_MOTOR_OVERCURRENT);
+END_IF
+END_METHOD
+```
+
+### Bu ne sağlar?
+
+- Alarm mantığı dağıtılmaz → merkezde toplanır  
+- HMI tek yerden okur  
+- Hangi modül alarm üretirse üretsin listeye eklenir  
+
+---
+
+## 8. HMI Tarafında Alarm Listeleme
+
+```iecst
+PROGRAM PLC_AlarmView
+VAR
+    i          : INT;
+    stAlarm    : ST_Alarm;
+    bHasActive : BOOL;
+END_VAR
+
+bHasActive := AlarmManagerInstance().HasActiveAlarms();
+
+FOR i := 1 TO 100 DO
+    stAlarm := AlarmManagerInstance().GetAlarmByIndex(i);
+    IF stAlarm.nId <> 0 THEN
+        // HMI’ya aktar:
+        // stAlarm.sSource
+        // stAlarm.sMessage
+        // stAlarm.bActive
+        // stAlarm.bAcked
+    END_IF
+END_FOR
+```
+
+---
+
+## 9. Özet
+
+Alarm Manager Singleton olduğunda:
+
+- Alarmlar tek merkezde tutulur  
+- Raise/Clear/Ack işlemleri tek noktadan yönetilir  
+- HMI/SCADA karmaşadan kurtulur  
+- Tüm makinenin alarm durumu **global olarak** izlenir  
+- Modüller “alarm saklamak” yerine sadece **bildirim yapar**
+
+**Port/Connection Singleton mantığıyla aynı:**  
+> “Kaynak tek, yönetici tek.”
+
+---
+
+
+
+# PLC / TwinCAT — **Hardware Driver (Singleton) Tasarımı**
+**Kayıpsız içerik – Markdown dokümanı**
+
+---
+
+## 1. PLC’de “Hardware Driver” ne demek?
+
+PLC tarafında “driver”, bir **donanım kaynağıyla doğrudan iletişim kuran modül**dür. Bu kaynak genelde:
+
+- RS232 / RS485 seri port
+- Modbus RTU / Modbus TCP master
+- EtherCAT özel terminal driver’ı (ağırlık modülü, IO-Link master vb.)
+- CANopen master / özel CAN protokol sürücüleri
+- Barkod okuyucu / RFID reader / kamera protokolü
+- Üreticiye özel servo / robot haberleşme FB’leri
+
+Ortak özellik:
+
+> **Arka planda tek bir fiziksel kaynak vardır.**
+
+- Tek port: COM1 / RS485 hattı  
+- Tek CAN ID / tek node  
+- Tek EtherCAT terminal  
+- Tek robot bağlantısı  
+
+Ama kod yazarken yanlışlıkla **birden fazla FB’yi aynı kaynağa eriştirip çakıştırmak** mümkündür.  
+
+Bu yüzden driver FB’nin **Singleton** olması gerekir.
+
+---
+
+## 2. Neden hardware driver Singleton olmalı?
+
+### Donanım tek olduğu için, driver’ı kontrol eden de tek olmalıdır.
+
+Eğer 2 FB aynı anda:
+
+- Aynı RS485’e bağlanırsa → *port already in use*
+- Aynı Modbus hattında master olmaya kalkarsa → *frame collision*
+- Aynı EtherCAT terminalini kontrol ederse → *random timeout*
+- Aynı cihaza komut yazarsa → cihaz cevap vermez / kilitlenir
+
+Bu durum sahada tipik olarak şöyle raporlanır:
+
+> “Makine arada bir sapıtıyor.”  
+> “Bazen iletişim gidiyor, resetleyince düzeliyor.”  
+
+Bunların neredeyse tamamı **driver çakışması**dır.
+
+### Çözüm
+- Donanımla konuşan **tek FB** olacak.
+- Diğer tüm modüller bu FB’ye istek gönderecek.
+
+Yani:
+
+> “Donanımı yöneten tek bir sahip (owner) var.”
+
+---
+
+## 3. Mimari: Driver FB + Global Singleton + Accessor
+
+Kalip:
+
+### 1) FB_XxxDriver  
+- Port açma / kapama  
+- Gönderme / okuma  
+- Timeout / retry / buffer yönetimi  
+- Cihazın tüm low-level mantığı burada
+
+### 2) Global instance (Singleton)
+```iecst
+g_XxxDriver : FB_XxxDriver;
+```
+
+### 3) Accessor function
+```iecst
+XxxDriverInstance() : REFERENCE TO FB_XxxDriver
+```
+
+### 4) Üst seviye FB’ler (tartı, barkod, robot…)
+- Donanımı **doğrudan** kullanmaz  
+- Sadece DriverInstance() üzerinden konuşur  
+
+---
+
+## 4. Örnek: RS485 için Singleton Driver
+
+Senaryo:  
+RS485’e bir tartı ya da genel bir cihaz bağlı. TwinCAT serial library ile haberleşiyorsun.
+
+---
+
+### 4.1 Driver FB – `FB_SerialDriver`
+
+```iecst
+FUNCTION_BLOCK FB_SerialDriver
+VAR
+    sPortName  : STRING(20) := 'COM1';
+    nBaudRate  : DINT := 9600;
+
+    bPortOpen  : BOOL;
+    bError     : BOOL;
+    nErrId     : UDINT;
+
+    fbSerial   : FB_SerialLine; // Temsili low-level FB
+END_VAR
+```
+
+---
+
+### Port Açma
+
+```iecst
+METHOD PUBLIC OpenPort
+VAR_INPUT
+    sPort : STRING;
+    nBaud : DINT;
+END_VAR
+
+IF NOT bPortOpen THEN
+    sPortName := sPort;
+    nBaudRate := nBaud;
+
+    // fbSerial.sPort := sPortName;
+    // fbSerial.nBaudRate := nBaudRate;
+    // fbSerial.bOpen := TRUE;
+
+    bPortOpen := TRUE;
+END_IF
+```
+
+---
+
+### Port Kapama
+
+```iecst
+METHOD PUBLIC ClosePort
+IF bPortOpen THEN
+    // fbSerial.bClose := TRUE;
+    bPortOpen := FALSE;
+END_IF
+```
+
+---
+
+### Data Gönderme
+
+```iecst
+METHOD PUBLIC Send
+VAR_INPUT
+    pData : POINTER TO BYTE;
+    nSize : UDINT;
+END_VAR
+
+IF NOT bPortOpen THEN
+    bError := TRUE;
+    nErrId := 16#0001;
+    RETURN;
+END_IF
+
+// fbSerial.pTxBuffer := pData;
+// fbSerial.nTxSize := nSize;
+// fbSerial.bSend := TRUE;
+```
+
+---
+
+### Data Alma
+
+```iecst
+METHOD PUBLIC Receive : UDINT
+VAR_INPUT
+    pBuffer  : POINTER TO BYTE;
+    nMaxSize : UDINT;
+END_VAR
+
+IF NOT bPortOpen THEN
+    RETURN 0;
+END_IF
+
+// fbSerial.pRxBuffer := pBuffer;
+// fbSerial.nRxMaxSize := nMaxSize;
+// fbSerial.bReceive := TRUE;
+// RETURN fbSerial.nRxReceived;
+
+RETURN 0;
+```
+
+Bu FB’nin ana prensibi:
+
+> Donanım portuna **sadece bu FB** dokunur.
+
+---
+
+## 4.2 Global Singleton Instance
+
+```iecst
+// GVL_Driver.TcGVL
+VAR_GLOBAL
+    g_SerialDriver : FB_SerialDriver;
+END_VAR
+```
+
+---
+
+## 4.3 Accessor Function
+
+```iecst
+FUNCTION SerialDriverInstance : REFERENCE TO FB_SerialDriver
+SerialDriverInstance REF= g_SerialDriver;
+```
+
+Artık kodun her yerinde:
+
+```iecst
+SerialDriverInstance().OpenPort('COM1', 9600);
+SerialDriverInstance().Send(ADR(buf), SIZEOF(buf));
+```
+
+Dediğinde **aynı driver** ile konuşuyorsun.
+
+---
+
+## 4.4 Üst Seviye FB’nin Driver Kullanması (Tartı örneği)
+
+```iecst
+FUNCTION_BLOCK FB_Scale
+VAR
+    wLastWeight : REAL;
+    aTxBuf      : ARRAY[0..15] OF BYTE;
+    aRxBuf      : ARRAY[0..31] OF BYTE;
+END_VAR
+```
+
+### Cyclic metodunda:
+
+```iecst
+METHOD PUBLIC Cyclic
+VAR
+    nRx : UDINT;
+END_VAR
+
+// Komut gönder
+aTxBuf[0] := 16#01; // cihaz adresi
+aTxBuf[1] := 16#52; // 'R' = read weight gibi varsayalım
+
+SerialDriverInstance().Send(ADR(aTxBuf), 2);
+
+// Cevap al
+nRx := SerialDriverInstance().Receive(ADR(aRxBuf), SIZEOF(aRxBuf));
+
+IF nRx > 0 THEN
+    // aRxBuf'tan ağırlık parse edilir
+END_IF
+```
+
+Bu yapıdaki güzellik:
+
+- FB_Scale **driver yazmıyor**
+- Sadece SerialDriverInstance() kullanıyor
+- Başka bir cihaz (ör. barkod okuyucu) da aynı hat üzerindeyse  
+  yine aynı driver kullanılır  
+  (adres/protokol ayrımı üst seviyede yapılır)
+
+---
+
+## 5. Bu tasarım başka donanımlara nasıl genellenir?
+
+### 1) Modbus RTU / TCP
+```
+FB_ModbusMasterDriver
+g_ModbusMasterDriver
+ModbusMasterInstance()
+```
+
+- Tek master, tüm register okuma/yazma buradan
+
+### 2) MQTT Driver
+```
+FB_MqttClientDriver
+g_MqttClient
+MqttClientInstance()
+```
+
+- Tek broker bağlantısı  
+- Tüm publish/subscribe işlemleri buradan
+
+### 3) Robot Controller Driver
+```
+FB_RobotDriver
+RobotDriverInstance()
+```
+
+- Robot program yükleme, start/stop, pozisyon sorgulama
+
+### 4) CANopen Master Driver
+```
+FB_CanDriver
+CanDriverInstance()
+```
+
+- Tüm CAN node erişimi tek master FB’den
+
+---
+
+## 6. Özet – Hardware Driver Singleton
+
+Hardware driver Singleton olursa:
+
+### ✔ Donanım kaynağı tek kişi tarafından kontrol edilir  
+### ✔ Port/bağlantı çakışmaları mimari olarak imkânsız hale gelir  
+### ✔ Timeout / frame collision hataları ortadan kalkar  
+### ✔ Debug, logging ve retry yönetimi tek yerden yapılır  
+### ✔ Üst seviye FB'ler donanım bağımlılığından kurtulur  
+### ✔ Uygulama çok daha kararlı ve deterministik çalışır  
+
+TwinCAT’te uygulama kalıbı:
+
+```iecst
+FB_Driver
+g_Driver : FB_Driver;
+DriverInstance();
+```
+
+---
+
+
+
+
+
+
 
