@@ -886,6 +886,236 @@ olur.
 
 ------------------------------------------------------------------------
 
+# PLC'de Config Manager Neden Singleton Olmalıdır?
+
+Aşağıda **Config Manager'ın neden Singleton olması gerektiği**,
+**TwinCAT'te nasıl uygulanacağı** ve **C# karşılığıyla bire bir
+ilişkisi** eksiksiz şekilde açıklanmıştır.
+
+------------------------------------------------------------------------
+
+# 1. Neden Config Manager Singleton Olmalı?
+
+Makine yapılandırması tek bir merkezden yönetilir:
+
+-   hız parametreleri
+-   zamanlayıcı ayarları
+-   limitler
+-   PID ayarları
+-   IO offsetleri
+-   reçete varsayılan değerleri
+-   proses parametreleri
+
+Eğer Config Manager'ın birden fazla instance'ı olursa:
+
+-   farklı modüller farklı config okur → **davranış tutarsızlığı**
+-   değişiklik bir modüle gider diğerine gitmez → **parametre
+    uyuşmazlığı**
+-   proses kontrolü güvenilmez hâle gelir
+
+Bu nedenle **Config Manager her PLC projesinde tek bir adet olmalıdır.**
+
+Bu tam anlamıyla Singleton gereksinimidir.
+
+------------------------------------------------------------------------
+
+# 2. Genel Tasarım
+
+TwinCAT ST tarafında Config Manager Singleton şu yapı ile kurulur:
+
+-   `FB_ConfigManager` → config değerlerini yöneten FB
+-   `GVL_Config` → tek instance
+-   `ConfigManagerInstance()` → C#'taki `ConfigManager.Instance`
+    karşılığı
+-   Tüm modüller bu instance'a referans alır
+
+Bu yapı **C# Singleton'ın PLC karşılığıdır**.
+
+------------------------------------------------------------------------
+
+# 3. Config Manager FB -- `FB_ConfigManager`
+
+Bu FB config parametrelerini saklar, yükler, değiştirir.
+
+``` iecst
+FUNCTION_BLOCK FB_ConfigManager
+VAR
+    nSpeedLimit : INT := 1000;
+    nTimeoutMs  : INT := 500;
+    rKp         : REAL := 1.0;
+    rKi         : REAL := 0.5;
+    rKd         : REAL := 0.1;
+
+    bInitialized : BOOL := FALSE;
+END_VAR
+```
+
+## Init metodu (isteğe bağlı)
+
+``` iecst
+METHOD PUBLIC Init
+IF NOT bInitialized THEN
+    // Dosyadan / remanent memory'den / ADS'ten config yüklenebilir
+    bInitialized := TRUE;
+END_IF
+```
+
+## Okuma Metodları
+
+``` iecst
+METHOD PUBLIC GetSpeedLimit : INT
+GetSpeedLimit := nSpeedLimit;
+END_METHOD
+
+METHOD PUBLIC GetTimeout : INT
+GetTimeout := nTimeoutMs;
+END_METHOD
+```
+
+## Değiştirme Metodu
+
+``` iecst
+METHOD PUBLIC SetSpeedLimit
+VAR_INPUT
+    speed : INT;
+END_VAR
+nSpeedLimit := speed;
+```
+
+------------------------------------------------------------------------
+
+# 4. Tekil Instance -- GVL içinde tanımlanır
+
+C# karşılığı:
+
+``` csharp
+private static ConfigManager _instance;
+```
+
+TwinCAT karşılığı:
+
+``` iecst
+VAR_GLOBAL
+    g_ConfigManager : FB_ConfigManager;  // Singleton instance
+END_VAR
+```
+
+Bu instance program boyunca **tek bir tanedir**.
+
+------------------------------------------------------------------------
+
+# 5. C#'taki Instance Property Karşılığı
+
+C#:
+
+``` csharp
+public static ConfigManager Instance => _instance;
+```
+
+TwinCAT ST:
+
+``` iecst
+FUNCTION ConfigManagerInstance : REFERENCE TO FB_ConfigManager
+ConfigManagerInstance REF= g_ConfigManager;
+```
+
+Bu fonksiyon, Config Manager'ın tek örneğini geri döndürür.
+
+------------------------------------------------------------------------
+
+# 6. Kullanım Örneği
+
+### Modül 1 -- Motion Control
+
+``` iecst
+speed := ConfigManagerInstance().GetSpeedLimit();
+```
+
+### Modül 2 -- Robot FB
+
+``` iecst
+timeout := ConfigManagerInstance().GetTimeout();
+```
+
+### Parametre Güncelleme
+
+``` iecst
+ConfigManagerInstance().SetSpeedLimit(1200);
+```
+
+Tüm modüller aynı instance'a erişir → **tek kaynaktan config okurlar**.
+
+------------------------------------------------------------------------
+
+# 7. Lazy Initialization Gerekiyorsa
+
+TwinCAT'te global FB'ler otomatik oluşturulur.
+
+Ama config'inizi **ilk kullanımda** yüklemek isterseniz:
+
+``` iecst
+IF NOT ConfigManagerInstance().bInitialized THEN
+    ConfigManagerInstance().Init();
+END_IF
+```
+
+Bu, C#'taki:
+
+``` csharp
+if (!Instance.Initialized) Instance.Init();
+```
+
+ile aynı mantıktır.
+
+------------------------------------------------------------------------
+
+# 8. Dosyadan Config Yükleme (İleri Seviye)
+
+Gerçek makinelerde config değerleri genellikle:
+
+-   JSON
+-   .txt
+-   .ini
+-   TwinCAT persistent variable
+-   ADS üzerinden SCADA
+
+ile yüklenir.
+
+FB içinde şu tür metotlar olabilir:
+
+``` iecst
+METHOD PUBLIC LoadFromFile
+VAR_INPUT
+    sFilePath : STRING;
+END_VAR
+// Tc2_Utilities FILE_READ kullanılabilir
+```
+
+``` iecst
+METHOD PUBLIC SaveToFile
+VAR_INPUT
+    sFilePath : STRING;
+END_VAR
+```
+
+İstersen bu metodların **tam çalışan implementasyonunu** da
+üretebilirim.
+
+------------------------------------------------------------------------
+
+# 9. Özet -- PLC Config Manager Singleton Mimarisi
+
+ | Yapı                    | İşlev                 | C# Eşdeğeri                                   |
+|-------------------------|-----------------------|-----------------------------------------------|
+| FB_ConfigManager        | Config iş mantığı     | class ConfigManager                           |
+| g_ConfigManager         | Tek instance          | private static ConfigManager _instance        |
+| ConfigManagerInstance() | Singleton accessor    | public static ConfigManager Instance          |
+| Init / Get / Set        | Config operasyonları  | Class methods                                 |
+
+
+📌 **PLC'de C# Singleton'ın tam karşılığı:**
+→ *Global instance + accessor function + FB içinde iş mantığı*
+
 
 
 
