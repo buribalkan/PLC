@@ -2663,7 +2663,6 @@ Bir büyüklüğün gerçek değeri bilinmiyorsa, ölçüm ve matematiksel model
 ---
 
 
-
 # Singleton & Teknik Terimler — Soru Bankası  
 **Kolaydan Zora, Kitap Formatında Sorular + Dipnot Cevapları**
 
@@ -2766,6 +2765,83 @@ Singleton olmadığında veriler farklı kaynaklarda farklı tutulur → veri uy
 [^15]: Recipe farklı FB’lerde farklı görünebilir → proses modülleri farklı parametrelerle çalışır → üretim tutarsızlığı ve hata oluşur.
 
 ---
+
+**Hazırlayan:**  
+Otomasyon & PLC Mimarisi — *Singleton Pattern Derin Teknik Soru Seti*
+
+
+
+
+## 📘 Ek Kodlama Soruları (Kolay → Zor)
+
+### 1. Singleton erişim hatası
+```iecst
+FUNCTION_BLOCK FB_Logger
+VAR
+    sLast : STRING(80);
+END_VAR
+
+METHOD PUBLIC Log
+VAR_INPUT s : STRING; END_VAR
+sLast := s;
+END_METHOD
+
+FUNCTION LoggerInstance : FB_Logger
+VAR_GLOBAL
+    g_Logger : FB_Logger;
+END_VAR
+
+LoggerInstance := g_Logger;
+```
+**Soru:** Singleton neden doğru çalışmaz ve nasıl düzeltilir?
+
+### 2. State machine geçişi
+```iecst
+CASE eState OF
+    ST_IDLE:
+        IF bStart THEN
+            eState := ST_RUN;
+        END_IF
+
+    ST_RUN:
+        IF bStop THEN
+            // eksik geçiş
+        END_IF
+END_CASE
+```
+**Soru:** ST_RUN → ST_IDLE geçişini yazınız.
+
+### 3. Config Manager senkronizasyonu
+**Soru:** Tüm modüllerin güncel değeri görmesi için tek erişim noktasını kodla gösterin.
+
+### 4. Alarm Manager Raise/Clear davranışı
+**Soru:** Overload alarmının doğru temizlenmesi için kodu düzeltin.
+
+### 5. RS485 Driver ile çoklu cihaz yönetimi
+```iecst
+FUNCTION_BLOCK FB_ScaleDevice
+VAR_INPUT
+    nAddress : BYTE;
+END_VAR
+VAR
+    aTx : ARRAY[0..15] OF BYTE;
+    aRx : ARRAY[0..31] OF BYTE;
+END_VAR
+
+METHOD PUBLIC ReadWeight
+VAR
+    nRx : UDINT;
+END_VAR
+
+// buraya kod yazılacak
+```
+**Soru:** Tek driver üzerinden farklı adreslerde çalışan yapıyı tamamlayın.
+
+### 6. Deterministik state machine sırası
+**Soru:** Geçişleri deterministik yapmak için doğru öncelik sırasıyla yeniden yazın.
+
+
+
 
 
 
