@@ -2524,6 +2524,146 @@ Bunun avantajları:
 ---
 
 
+# Teknik Terimler Sözlüğü  
+*(Deterministik — Heuristik — Prognostik ve ilgili kavramlar)*  
+
+---
+
+Bu sözlük, otomasyon, PLC, kontrol teorisi, yapay zekâ ve mühendislik disiplinlerinde sık geçen soyut ve teknik terimlerin **kısa, anlaşılır ve teknik olarak doğru** açıklamalarını içerir.  
+Dipnotlar bölüm sonunda verilmiştir.
+
+---
+
+## 1. Deterministik *(Deterministic)* [^1]
+Aynı giriş → her zaman aynı çıkış.  
+Tesadüf veya belirsizlik yoktur.
+
+---
+
+## 2. Heuristik *(Heuristic)* [^2]
+Kesin çözüm üretmeyen; pratik, hızlı ve yaklaşık yöntem.  
+Deneyime dayalı kurallar.
+
+---
+
+## 3. Prognostik *(Prognostic)* [^3]
+Bir arızanın **ne zaman** oluşacağını veya sistem ömrünün **ne kadar kaldığını** tahmin eder.
+
+---
+
+## 4. Stokastik *(Stochastic)* [^4]
+Davranışı rastlantısal değişkenlere bağlı olan süreç.
+
+---
+
+## 5. Probabilistik *(Probabilistic)* [^5]
+Çıktılar olasılık dağılımlarına göre tanımlanır; kesinlik yoktur.
+
+---
+
+## 6. Preskriptif *(Prescriptive)* [^6]
+Sistemin ne yapması gerektiğini söyleyen karar modelleri; optimizasyon tabanlı öneriler.
+
+---
+
+## 7. Diagnostik *(Diagnostic)* [^7]
+Mevcut hatanın nedenini belirleme; alarm analizi.
+
+---
+
+## 8. Semantik *(Semantic)* [^8]
+Bir verinin, sembolün veya tag’in **anlam** içeriği.
+
+---
+
+## 9. Sibernetik *(Cybernetics)* [^9]
+Geri besleme (feedback) ve kontrol sistemlerinin bilimi.
+
+---
+
+## 10. Deterministik Zamanlama *(Real-Time Determinism)* [^10]
+Sistemin bir işlemi tam belirtilen sürede tamamlamayı garanti etmesi.
+
+---
+
+## 11. Optimistik Algoritma *(Optimistic Algorithm)* [^11]
+Çakışmaların nadir olduğunu varsayar; hızlıdır ancak risk alır.
+
+---
+
+## 12. Pessimistik Yaklaşım *(Pessimistic)* [^12]
+Çakışmaların olacağını varsayar; güvenlidir ama daha yavaştır.
+
+---
+
+## 13. Deterministik Sonlu Durum Makinesi *(Deterministic Finite State Machine — DFSM)* [^13]
+Her durumda yalnızca **bir** geçerli sonraki adım vardır.
+
+---
+
+## 14. Non‑Deterministik *(Nondeterministic)* [^14]
+Bir durumda birden fazla geçerli olasılık bulunabilir.  
+(Teorik modellerde yaygındır.)
+
+---
+
+## 15. Telemetri *(Telemetry)* [^15]
+Uzaktaki cihazlardan veri toplama.
+
+---
+
+## 16. Telemetrik Analiz *(Telemetry Analytics)* [^16]
+Toplanan verilerin anlamlandırılması ve yorumlanması.
+
+---
+
+## 17. Anomali Tespiti *(Anomaly Detection)* [^17]
+Normal davranıştan sapmaları bulur; erken arıza tespiti için kullanılır.
+
+---
+
+## 18. Sensör Füzyonu *(Sensor Fusion)* [^18]
+Birden fazla sensörden gelen veriyi birleştirerek daha yüksek doğruluk üretme.
+
+---
+
+## 19. Regresyon *(Regression)* [^19]
+Bir değişkenin diğer değişkenlere göre matematiksel tahmini.
+
+---
+
+## 20. Kestirim *(Estimation)* [^20]
+Bir büyüklüğün gerçek değeri bilinmiyorsa, ölçüm ve matematiksel modellerle **yaklaşık** hesaplanması.
+
+---
+
+# 📎 Dipnotlar
+
+[^1]: Deterministik sistemler, PLC ve gerçek zamanlı kontrol uygulamalarında temel gerekliliktir.  
+[^2]: Heuristik yöntemler, optimum değil *yeterince iyi* sonuç verecek karar kurallarıdır.  
+[^3]: Prognostik analiz, titreşim/ısı/ses verilerinden arıza zamanını tahmin eder.  
+[^4]: Stokastik süreçler rastgelelik içerir; sensör gürültüsü bunun doğal bir örneğidir.  
+[^5]: Probabilistik modeller, risk ve belirsizlik hesaplamalarında kullanılır.  
+[^6]: Preskriptif modeller optimizasyona dayanır ve sistem için en iyi eylemi önerir.  
+[^7]: Diagnostik yaklaşım mevcut arızayı kök sebep analiziyle belirler.  
+[^8]: Semantik veri, sadece sayı değil **anlam** taşır (ör. bEmergencyStop = “acil stop aktif”).  
+[^9]: Sibernetik, kontrol teorisinin temel kavramlarını tanımlar (feedback, correction vb.).  
+[^10]: EtherCAT ve güvenlik PLC’leri deterministik zamanlama gerektirir.  
+[^11]: Optimistik yöntemler hızlıdır; çakışma olursa yeniden denenir.  
+[^12]: Pessimistik yaklaşım çakışmayı baştan engeller (lock mekanizmaları gibi).  
+[^13]: PLC’de kullanılan state machine’ler genelde deterministiktir.  
+[^14]: Non‑deterministik modeller daha çok bilgisayar bilimi teorisinde görülür.  
+[^15]: SCADA/IIoT sistemleri telemetri ile veri toplar.  
+[^16]: Analiz aşaması, telemetri verisini anlamlı bilgiye dönüştürür.  
+[^17]: Anomali tespiti, erken arıza ve güvenlik ihlallerinde kritik rol oynar.  
+[^18]: Örnek: IMU + GPS birleşimi ile daha stabil konum hesaplama.  
+[^19]: Regresyon, tahmin modellerinin matematiksel temelidir.  
+[^20]: Kestirim, filtreleme teknikleri (Kalman vb.) ile daha doğru ölçüm üretir.
+
+---
+
+
+
 
 
 
