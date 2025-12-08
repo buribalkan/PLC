@@ -886,7 +886,6 @@ olur.
 
 ------------------------------------------------------------------------
 
-Bu liste **gerçek endüstriyel PLC projelerinde Singleton'ın nerede
-kullanıldığını** en net şekilde özetler.
+
 
 
