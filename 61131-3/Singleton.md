@@ -2524,6 +2524,114 @@ Bunun avantajları:
 ---
 
 
+# Singleton & Teknik Terimler — Soru Bankası  
+
+
+---
+
+# Sorular
+
+---
+
+
+
+### **Soru 1:**  
+Singleton deseninin temel amacı nedir?
+
+### **Soru 2:**  
+PLC’de neden bir seri port sürücüsü (RS485) Singleton yapılmalıdır?
+
+### **Soru 3:**  
+Recipe Manager’ın tekil (Singleton) olması neden önemlidir?
+
+### **Soru 4:**  
+Deterministik sistem ne demektir?
+
+### **Soru 5:**  
+Heuristik yöntemler kesin çözüm sağlar mı?
+
+---
+
+
+### **Soru 6:**  
+Alarm Manager neden birden fazla instance’a sahip olmamalıdır?
+
+### **Soru 7:**  
+PLC mimarisinde global bir config manager olmasaydı hangi problemler ortaya çıkardı?
+
+### **Soru 8:**  
+Machine State (FSM) Singleton olmazsa makinede hangi tür hatalar gözlenebilir?
+
+### **Soru 9:**  
+Stokastik bir sistem ile deterministik bir sistem arasındaki fark nedir?
+
+### **Soru 10:**  
+Preskriptif bir model ile prognostik bir model arasındaki farkı açıklayın.
+
+---
+
+
+### **Soru 11:**  
+PLC’de hem Alarm Manager hem Recipe Manager hem de State Machine Singleton değilse sistemde hangi tür *senkronizasyon bozuklukları* oluşabilir? En az üç örnek verin.
+
+### **Soru 12:**  
+Singleton Driver (ör. RS485) yerine iki farklı FB ile aynı porta erişilmeye çalışıldığında protokol seviyesinde görülebilecek hataları açıklayın.
+
+### **Soru 13:**  
+Deterministik olmayan (non‑deterministic) yapılar PLC’de neden tercih edilmez? Örnek bir senaryo ile açıklayın.
+
+### **Soru 14:**  
+Bir makinede hem prognostik hem de diagnostik analizlerin tutulduğu sistemde Singleton yaklaşımı kullanılmazsa veri bütünlüğü nasıl bozulabilir?
+
+### **Soru 15:**  
+Aynı makinede State Machine, Alarm Manager ve Hardware Driver Singleton iken Recipe Manager’ın Singleton olmaması neden tehlikeli bir mimari açığıdır? Teknik gerekçe ile açıklayın.
+
+---
+
+Cevaplar
+1. Singleton’ın amacı, bir sınıfın veya FB’nin tek bir örneğini oluşturmak ve tüm sistemin bu tek örneğe erişmesini sağlamaktır.
+   
+2. RS485 donanımı fiziksel olarak tektir; iki farklı FB aynı anda portu açmaya çalışırsa çakışma, timeout ve iletişim bozulması ortaya çıkar.
+
+3. Makinedeki tüm modüller aynı ürün parametrelerini kullanmalıdır; birden fazla recipe kaynağı olursa değerler tutarsız olur ve proses davranışı bozulur.
+
+4. Deterministik sistemlerde aynı giriş her zaman aynı sonucu üretir; yani belirsizlik ve rastgelelik yoktur.
+
+5. Hayır. Heuristik yöntemler hızlı ve pratik çözümler üretir ancak kesin doğruyu garanti etmez; yalnızca “yaklaşık olarak iyi” sonuç verir.
+
+6. Eğer birden fazla Alarm Manager olursa: Alarmlar farklı listelere yazılır, HMI hangi listeyi göstermesi gerektiğini bilemez ve sistem tamamen tutarsız olur.
+
+7. Config Manager tek olmazsa farklı modüller farklı ayar değerleri görür. Bu durum makinenin davranışını tutarsız hâle getirir ve bakım süreçlerini zorlaştırır.
+
+8. State machine tek merkezden yönetilmezse bir modül RUN durumundayken diğeri STOP veya ERROR durumunda olabilir; makine kaotik davranır.
+
+9. Deterministik sistemler kesin sonuç üretir. Stokastik sistemler ise olasılıksal davranır ve sonuçlar rastlantısaldır.
+
+10. Prognostik: “Ne zaman arıza olacak?” veya “Bileşenin ömrü ne kadar kaldı?”  
+Preskriptif: “Ne yapılmalı?”, “En iyi aksiyon nedir?” sorularını yanıtlar.
+
+11. Singleton kullanılmazsa oluşabilecek tipik sorunlar:
+⦁	Alarmlar farklı listelere yazılır → HMI tutarsız gösterir
+⦁	Recipe farklı FB’lerde farklı görünür → proses karışır
+⦁	State Machine farklı FB’lerde farklı durur → kontrol deterministik olmaz
+
+12. Donanım driver’ı Singleton olmazsa ortaya çıkabilecek iletişim sorunları:
+⦁	Frame çarpışmaları
+⦁	CRC hataları
+⦁	Donanımın yanıt vermemesi
+⦁	Timeout ve jitter kaynaklı zamanlama bozulmaları
+
+13. PLC gerçek zamanlıdır; belirsiz (non-deterministic) geçişlere izin verilirse PLC’nin davranışı öngörülemez hâle gelir ve kontrol güvenilirliğini kaybeder.
+
+14. Prognostik: arıza zamanını tahmin eder.  
+Diagnostik: mevcut arızanın nedenini belirler.  
+Singleton olmazsa her FB farklı veri tutar → veri uyumsuzluğu ortaya çıkar.
+
+15. Recipe Manager tek olmazsa farklı FB’ler farklı recipe parametrelerini görür. Bu durum proses modüllerinin farklı değerlerle çalışmasına ve üretim tutarsızlığına yol açar.
+
+-----------------
+
+
 # Teknik Terimler Sözlüğü  
 *(Deterministik — Heuristik — Prognostik ve ilgili kavramlar)*  
 
@@ -2663,109 +2771,3 @@ Bir büyüklüğün gerçek değeri bilinmiyorsa, ölçüm ve matematiksel model
 ---
 
 
-# Singleton & Teknik Terimler — Soru Bankası  
-**Kolaydan Zora, Kitap Formatında Sorular + Dipnot Cevapları**
-
----
-
-# Sorular
-
----
-
-
-
-### **Soru 1:**  
-Singleton deseninin temel amacı nedir?
-
-### **Soru 2:**  
-PLC’de neden bir seri port sürücüsü (RS485) Singleton yapılmalıdır?
-
-### **Soru 3:**  
-Recipe Manager’ın tekil (Singleton) olması neden önemlidir?
-
-### **Soru 4:**  
-Deterministik sistem ne demektir?
-
-### **Soru 5:**  
-Heuristik yöntemler kesin çözüm sağlar mı?
-
----
-
-
-### **Soru 6:**  
-Alarm Manager neden birden fazla instance’a sahip olmamalıdır?
-
-### **Soru 7:**  
-PLC mimarisinde global bir config manager olmasaydı hangi problemler ortaya çıkardı?
-
-### **Soru 8:**  
-Machine State (FSM) Singleton olmazsa makinede hangi tür hatalar gözlenebilir?
-
-### **Soru 9:**  
-Stokastik bir sistem ile deterministik bir sistem arasındaki fark nedir?
-
-### **Soru 10:**  
-Preskriptif bir model ile prognostik bir model arasındaki farkı açıklayın.
-
----
-
-
-### **Soru 11:**  
-PLC’de hem Alarm Manager hem Recipe Manager hem de State Machine Singleton değilse sistemde hangi tür *senkronizasyon bozuklukları* oluşabilir? En az üç örnek verin.
-
-### **Soru 12:**  
-Singleton Driver (ör. RS485) yerine iki farklı FB ile aynı porta erişilmeye çalışıldığında protokol seviyesinde görülebilecek hataları açıklayın.
-
-### **Soru 13:**  
-Deterministik olmayan (non‑deterministic) yapılar PLC’de neden tercih edilmez? Örnek bir senaryo ile açıklayın.
-
-### **Soru 14:**  
-Bir makinede hem prognostik hem de diagnostik analizlerin tutulduğu sistemde Singleton yaklaşımı kullanılmazsa veri bütünlüğü nasıl bozulabilir?
-
-### **Soru 15:**  
-Aynı makinede State Machine, Alarm Manager ve Hardware Driver Singleton iken Recipe Manager’ın Singleton olmaması neden tehlikeli bir mimari açığıdır? Teknik gerekçe ile açıklayın.
-
----
-
-Cevaplar
-1. Singleton’ın amacı, bir sınıfın veya FB’nin tek bir örneğini oluşturmak ve tüm sistemin bu tek örneğe erişmesini sağlamaktır.
-   
-2. RS485 donanımı fiziksel olarak tektir; iki farklı FB aynı anda portu açmaya çalışırsa çakışma, timeout ve iletişim bozulması ortaya çıkar.
-
-3. Makinedeki tüm modüller aynı ürün parametrelerini kullanmalıdır; birden fazla recipe kaynağı olursa değerler tutarsız olur ve proses davranışı bozulur.
-
-4. Deterministik sistemlerde aynı giriş her zaman aynı sonucu üretir; yani belirsizlik ve rastgelelik yoktur.
-
-5. Hayır. Heuristik yöntemler hızlı ve pratik çözümler üretir ancak kesin doğruyu garanti etmez; yalnızca “yaklaşık olarak iyi” sonuç verir.
-
-6. Eğer birden fazla Alarm Manager olursa: Alarmlar farklı listelere yazılır, HMI hangi listeyi göstermesi gerektiğini bilemez ve sistem tamamen tutarsız olur.
-
-7. Config Manager tek olmazsa farklı modüller farklı ayar değerleri görür. Bu durum makinenin davranışını tutarsız hâle getirir ve bakım süreçlerini zorlaştırır.
-
-8. State machine tek merkezden yönetilmezse bir modül RUN durumundayken diğeri STOP veya ERROR durumunda olabilir; makine kaotik davranır.
-
-9. Deterministik sistemler kesin sonuç üretir. Stokastik sistemler ise olasılıksal davranır ve sonuçlar rastlantısaldır.
-
-10. Prognostik: “Ne zaman arıza olacak?” veya “Bileşenin ömrü ne kadar kaldı?”  
-Preskriptif: “Ne yapılmalı?”, “En iyi aksiyon nedir?” sorularını yanıtlar.
-
-11. Singleton kullanılmazsa oluşabilecek tipik sorunlar:
-⦁	Alarmlar farklı listelere yazılır → HMI tutarsız gösterir
-⦁	Recipe farklı FB’lerde farklı görünür → proses karışır
-⦁	State Machine farklı FB’lerde farklı durur → kontrol deterministik olmaz
-
-12. Donanım driver’ı Singleton olmazsa ortaya çıkabilecek iletişim sorunları:
-⦁	Frame çarpışmaları
-⦁	CRC hataları
-⦁	Donanımın yanıt vermemesi
-⦁	Timeout ve jitter kaynaklı zamanlama bozulmaları
-
-13. PLC gerçek zamanlıdır; belirsiz (non-deterministic) geçişlere izin verilirse PLC’nin davranışı öngörülemez hâle gelir ve kontrol güvenilirliğini kaybeder.
-
-14. Prognostik: arıza zamanını tahmin eder.  
-Diagnostik: mevcut arızanın nedenini belirler.  
-Singleton olmazsa her FB farklı veri tutar → veri uyumsuzluğu ortaya çıkar.
-
-15. Recipe Manager tek olmazsa farklı FB’ler farklı recipe parametrelerini görür. Bu durum proses modüllerinin farklı değerlerle çalışmasına ve üretim tutarsızlığına yol açar.
-
------------------
