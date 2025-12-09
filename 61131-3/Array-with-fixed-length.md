@@ -864,6 +864,253 @@ TwinCAT ile veri işleme, kontrol algoritmaları ve endüstriyel sistemlerde ARR
 
 ---
 
+# 📘 TwinCAT Lookup Table (LUT) – Tam Kapsamlı Eğitim Dokümanı
+
+Bu doküman, TwinCAT’te **Lookup Table (LUT)** kullanımını sıfır bilgi seviyesinden ileri mühendislik seviyesine kadar eksiksiz şekilde açıklar.  
+LUT; sensör linearizasyonundan kontrol algoritmalarına kadar endüstride en çok kullanılan hızlandırma tekniklerinden biridir.
+
+---
+
+# # 🔍 1. Lookup Table (LUT) Nedir?
+
+Lookup Table (LUT), bir fonksiyonun çıktılarını **önceden hesaplayıp bir diziye kaydetme**, çalışma anında ise hesaplama yapmak yerine **tablodan doğrudan okuma** işlemidir.
+
+> ✔ *"Hesaplamak yerine okumak."*  
+> Bu sayede PLC CPU yükü büyük oranda azalır.
+
+---
+
+# # 🚀 2. LUT Neden Kullanılır? (Gerçek Dünya Uygulamaları)
+
+### ✔ 1. Yüksek maliyetli hesaplamaları hızlandırmak  
+- Sinüs, kosinüs  
+- Logaritma  
+- Üstel fonksiyon  
+- Polinom çözümü  
+
+PLC’de bu işlemler **yavaştır** → LUT **çok hızlıdır**.
+
+---
+
+### ✔ 2. Sensör linearizasyonu  
+Gerçek sensörler genelde **doğrusal değildir**.
+
+Örn:  
+0–4095 → ADC  
+0–250°C → Gerçek sıcaklık
+
+Linearizasyon LUT ile yapılır.
+
+---
+
+### ✔ 3. Kalibrasyon eğrileri  
+Üretici tabloları doğrudan LUT’a aktarılır.
+
+---
+
+### ✔ 4. Motor, pompa, servo karakteristik haritaları  
+Örn:  
+PWM → Tork  
+Akım → Hız  
+Sıcaklık → Kompanzasyon
+
+---
+
+### ✔ 5. Hızlı kontrol algoritmaları  
+PID feedforward (FFWD) tabloları.
+
+---
+
+# # 🔧 3. TwinCAT’te Lookup Table Tanımlama
+
+### Basit LUT:
+
+```pascal
+VAR
+    aLUT : ARRAY[0..9] OF REAL := [0.0, 1.2, 2.7, 4.5, 6.8, 9.5, 12.8, 16.7, 21.3, 26.6];
+END_VAR
+```
+
+### Erişim:
+
+```pascal
+rOutput := aLUT[nIndex];
+```
+
+---
+
+# # 🧩 4. Sensör Linearizasyonu Örneği
+
+Ham sensör okuması (0–4095):
+
+```pascal
+rRaw := AI_Temp;
+```
+
+Index'e dönüştürme:
+
+```pascal
+nIndex := LIMIT(0, INT(rRaw / 410), 9);
+```
+
+Table lookup:
+
+```pascal
+rTemp := aTempLUT[nIndex];
+```
+
+---
+
+# # 🎚 5. Interpolasyonlu Lookup Table (Daha Hassas)
+
+Gerçek dünyada değer LUT noktalarının arasına düşebilir.  
+Bu nedenle **lineer interpolasyon** kullanılır.
+
+### Formül:
+
+```
+y = y0 + (x - x0) * (y1 - y0) / (x1 - x0)
+```
+
+### TwinCAT kodu:
+
+```pascal
+nLow  := nIndex;
+nHigh := nIndex + 1;
+
+y0 := aLUT[nLow];
+y1 := aLUT[nHigh];
+
+rOutput := y0 + (x - nLow) * (y1 - y0);
+```
+
+✔ Sensör linearizasyonunda endüstri standardıdır.
+
+---
+
+# # 🧮 6. 2 Boyutlu Lookup Table (2D LUT)
+
+Bazı fonksiyonlar **iki değişkene bağlıdır**:
+
+- Sıcaklık & basınç → Yoğunluk  
+- Hız & tork → Güç  
+- Açı & yük → Servo komutları  
+
+### Tanım:
+
+```pascal
+aMap : ARRAY[0..10, 0..10] OF REAL;
+```
+
+### Kullanım:
+
+```pascal
+rOutput := aMap[nTempIdx, nPressIdx];
+```
+
+---
+
+# # 🧊 7. 3D Lookup Table (3D LUT)
+
+Örneğin motor haritalarında:
+
+- Hız  
+- Tork  
+- Sıcaklık  
+
+üç farklı eksendir.
+
+### Tanım:
+
+```pascal
+aMap3D : ARRAY[0..10, 0..10, 0..10] OF REAL;
+```
+
+---
+
+# # ⚡ 8. Neden LUT Çok Hızlıdır? (Performans Analizi)
+
+| İşlem türü          | Göreceli hız |
+|---------------------|--------------|
+| sin(x)              | Yavaş        |
+| log(x)              | Yavaş        |
+| karmaşık polinom    | Orta         |
+| **LUT lookup**      | **Çok hızlı** |
+
+PLC tarama süresini azaltır → gerçek zamanlı sistemlerde kritik öneme sahiptir.
+
+---
+
+# # 🏎 9. LUT ile PWM Linearization Örneği
+
+Motorlar genelde doğrusal tepki vermez.  
+PWM komutu → gerçek tork eğrisi LUT ile düzeltilir.
+
+```pascal
+aPWMfix : ARRAY[0..100] OF REAL := [
+    0.0, 0.1, 0.4, 0.8, 1.3, ... , 100.0
+];
+
+rCorrected := aPWMfix[nPWMpercent];
+```
+
+Sonuç → **daha stabil ve hassas motor kontrolü**
+
+---
+
+# # 📉 10. LUT ile Ters Fonksiyon Hesabı
+
+Bazı fonksiyonlar:
+
+- hesaplanması zor  
+- tersinin bulunması daha zor  
+
+Örn:  
+Seviye → Debi dönüştürme.
+
+Proses mühendisleri eğriyi verir → PLC içinde LUT olur.
+
+---
+
+# # ☑ 11. Lookup Table Kullanırken Dikkat Edilecekler
+
+### ✔ Index mutlaka sınırlandırılmalı
+
+```pascal
+nIndex := LIMIT(0, nIndex, 100);
+```
+
+### ✔ Büyük LUT RAM tüketir  
+Genelde PLC için sorun değildir, ama bilinmelidir.
+
+### ✔ Tablolar revizyon kontrolüne tabi olmalıdır  
+Yanlış LUT → yanlış proses.
+
+### ✔ Interpolation doğruluğu artırır  
+Özellikle sensörlerde **çok kritik**.
+
+---
+
+# # 🎉 Özet
+
+Lookup Table:
+
+- CPU yükünü azaltır  
+- Hız kazandırır  
+- Sensör linearizasyonu için mükemmel çözüm sağlar  
+- 1D, 2D, 3D tablolarla çok esnek bir yapıdır  
+- Interpolation ile yüksek doğruluk elde edilir  
+
+Endüstride LUT en sık kullanılan optimizasyon tekniklerindendir.
+
+---
+
+# 📁 Dosya Bilgisi
+Bu dosya TwinCAT eğitim setine uygun olarak hazırlanmıştır ve diğer modüllerle birebir uyumludur.
+
+---
+
+
 
 
 
