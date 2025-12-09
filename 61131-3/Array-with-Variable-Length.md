@@ -202,3 +202,213 @@ TwinCAT’te **data processing**, **batch operations**, **sensor handling** gibi
 
 ---
 
+# 📘 TwinCAT – Full Data Processing Pipeline  
+### *Gerçek Dünya İçin Tam Kapsamlı Eğitim Dokümanı (.md)*
+
+---
+
+# 🏭 1. Giriş – Full Data Processing Nedir?
+
+Üretim hatlarında sensörlerden gelen veriler **ham** hâlde gürültülü, dengesiz, doğrusal olmayan ve hatalı olabilir.  
+Bu nedenle veriler işlemeye alınmadan:
+
+- Filtrelenir  
+- Normalize edilir  
+- Linearize edilir (Lookup Table ile)  
+- Eşik değerlerine göre kontrol edilir  
+- Batch istatistiklerine dönüştürülür  
+- Formatlanmış bir sonuç yapısına aktarılır  
+
+Bu dokümanda, endüstriyel otomasyon projelerinde kullanılan **tam kapsamlı bir veri işleme hattı (pipeline)** adım adım TwinCAT kodlarıyla anlatılmıştır.
+
+---
+
+# 🧱 2. Veri Yapısı Tanımı (ST_ProcessedData)
+
+Bu yapı tüm veri işleme çıktılarının tek bir pakette tutulmasını sağlar.
+
+```pascal
+TYPE ST_ProcessedData :
+STRUCT
+    RawValues      : ARRAY[1..16] OF LREAL;
+    FilteredValues : ARRAY[1..16] OF LREAL;
+    Normalized     : ARRAY[1..16] OF LREAL;
+    Linearized     : ARRAY[1..16] OF LREAL;
+    MaxValue       : LREAL;
+    MinValue       : LREAL;
+    AvgValue       : LREAL;
+    ThresholdFlags : ARRAY[1..16] OF BOOL;
+END_STRUCT
+END_TYPE
+```
+
+---
+
+# 📈 3. Lookup Table (Linearization Table)
+
+Bu tablo sensör doğrultma için kullanılır.
+
+```pascal
+VAR_GLOBAL CONSTANT
+    aLinearLUT : ARRAY[0..100] OF LREAL := [
+        0.0, 0.5, 1.0, 1.6, 2.3, 3.1
+        (* ... örnek değerler 0..100 arası *)
+    ];
+END_VAR
+```
+
+---
+
+# 🧠 4. Full Data Processing Function Block
+
+Pipeline adımları tek FB içinde yapılır.
+
+```pascal
+FUNCTION_BLOCK FB_DataProcessor
+VAR_INPUT
+    aInput     : ARRAY[1..16] OF LREAL;
+    rThreshold : LREAL := 75.0;
+END_VAR
+
+VAR_OUTPUT
+    stOut : ST_ProcessedData;
+END_VAR
+
+VAR
+    i, j   : INT;
+    rSum   : LREAL;
+    rMin   : LREAL := 99999;
+    rMax   : LREAL := -99999;
+    nIndex : INT;
+END_VAR
+```
+
+---
+
+# 🔧 5. Adım 1 – Ham Veriyi Kopyalama
+
+```pascal
+FOR i := 1 TO 16 DO
+    stOut.RawValues[i] := aInput[i];
+END_FOR
+```
+
+---
+
+# 🔁 6. Adım 2 – Moving Average Filtreleme
+
+Sensör gürültüsünü azaltmak için geçmiş 10 veri saklanır.
+
+```pascal
+VAR
+    aHistory : ARRAY[1..16, 1..10] OF LREAL;
+    nIdx     : INT := 1;
+END_VAR
+
+FOR i := 1 TO 16 DO
+    aHistory[i, nIdx] := aInput[i];
+END_FOR
+
+nIdx := nIdx + 1;
+IF nIdx > 10 THEN nIdx := 1; END_IF;
+
+FOR i := 1 TO 16 DO
+    rSum := 0;
+    FOR j := 1 TO 10 DO
+        rSum := rSum + aHistory[i, j];
+    END_FOR
+    stOut.FilteredValues[i] := rSum / 10;
+END_FOR
+```
+
+---
+
+# 🎚 7. Adım 3 – Normalize Etme (0–1 Arası)
+
+Önce minimum ve maksimum değer bulunur:
+
+```pascal
+FOR i := 1 TO 16 DO
+    IF stOut.FilteredValues[i] < rMin THEN rMin := stOut.FilteredValues[i]; END_IF
+    IF stOut.FilteredValues[i] > rMax THEN rMax := stOut.FilteredValues[i]; END_IF
+END_FOR
+```
+
+Normalize işlemi:
+
+```pascal
+FOR i := 1 TO 16 DO
+    stOut.Normalized[i] := (stOut.FilteredValues[i] - rMin) / (rMax - rMin);
+END_FOR
+```
+
+---
+
+# 🔍 8. Adım 4 – Lookup Table ile Linearization
+
+```pascal
+FOR i := 1 TO 16 DO
+    nIndex := LIMIT(0, INT(stOut.Normalized[i] * 100), 100);
+    stOut.Linearized[i] := aLinearLUT[nIndex];
+END_FOR
+```
+
+---
+
+# 🚨 9. Adım 5 – Threshold Kontrolü
+
+```pascal
+FOR i := 1 TO 16 DO
+    stOut.ThresholdFlags[i] := (stOut.Linearized[i] > rThreshold);
+END_FOR
+```
+
+---
+
+# 📊 10. Adım 6 – Batch İstatistikleri (Min, Max, Ortalama)
+
+```pascal
+rSum := 0;
+FOR i := 1 TO 16 DO
+    rSum := rSum + stOut.Linearized[i];
+END_FOR
+
+stOut.AvgValue := rSum / 16;
+stOut.MaxValue := rMax;
+stOut.MinValue := rMin;
+```
+
+---
+
+# 🧪 11. Kullanım Örneği (MAIN Program)
+
+```pascal
+PROGRAM MAIN
+VAR
+    fbProc   : FB_DataProcessor;
+    aSensors : ARRAY[1..16] OF LREAL := [12.3, 11.0, 9.5, 8.8, 13.2, 14.1];
+END_VAR
+
+fbProc(aInput := aSensors, rThreshold := 70.0);
+```
+
+---
+
+# 🏆 12. Full Pipeline Özeti
+
+| Adım | Açıklama |
+|------|----------|
+| 1 | Ham veri alma |
+| 2 | Moving average ile filtreleme |
+| 3 | Normalize etme |
+| 4 | Lookup table ile sensör linearization |
+| 5 | Threshold kontrol |
+| 6 | İstatistiksel analiz (min–max–avg) |
+| 7 | Sonuçları struct içine aktarma |
+
+Bu pipeline, endüstriyel veri işleme için **çok güçlü, ölçeklenebilir ve gerçek dünya ile birebir uyumlu** bir yapıdır.
+
+---
+
+
+
