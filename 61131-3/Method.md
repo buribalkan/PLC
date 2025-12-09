@@ -718,6 +718,320 @@ Bu senaryo, METHOD kullanımı için mükemmel bir gerçek dünya örneğidir ç
 
 ---
 
+# TwinCAT PLC – En Çok Kullanılan METHOD Örnekleri  
+## (Tamamen Çalışan, Açıklamalı, Pratik Kullanım Odaklı)
+
+Bu doküman, gerçek endüstriyel PLC projelerinde en sık kullanılan METHOD yapılarının tamamını içerir.  
+Her method, **simple (basit)** ama **doğrudan sahada kullanılan** bir kullanım örneğini temsil eder.
+
+---
+
+# 1. Reset() — Başlangıca Döndürme
+
+Sistemi bilinen bir duruma geri çeker.
+
+```pascal
+METHOD Reset
+Count := 0;
+Error := FALSE;
+State := 0;
+Timer(IN:=FALSE);
+```
+
+---
+
+# 2. Init() — İlk Kurulum
+
+FB ilk çalıştırıldığında yapılması gereken ayarlar.
+
+```pascal
+METHOD Init
+IsInitialized := TRUE;
+Count := 0;
+TargetValue := 100;
+Timer(IN:=FALSE);
+```
+
+---
+
+# 3. Start() — Süreç Başlatma
+
+Bir motor, proses veya hareketi başlatır.
+
+```pascal
+METHOD Start
+IsRunning := TRUE;
+StartTime := TIME();
+```
+
+---
+
+# 4. Stop() — Güvenli Durdurma
+
+```pascal
+METHOD Stop
+IsRunning := FALSE;
+StopTime := TIME();
+```
+
+---
+
+# 5. Update() — Her Çevrimde Çağrılan Method
+
+Gerçek zamanlı güncelleme algoritmalarının yeri.
+
+```pascal
+METHOD Update
+IF IsRunning THEN
+    Position := Position + Speed * CycleTime;
+END_IF
+```
+
+---
+
+# 6. SetValue() — Değer Atama İşlemi
+
+```pascal
+METHOD SetValue
+VAR_INPUT
+    NewValue : REAL;
+END_VAR
+
+IF NewValue >= 0 THEN
+    Value := NewValue;
+END_IF
+```
+
+---
+
+# 7. GetValue() — Değer Döndürme
+
+```pascal
+METHOD GetValue : REAL
+GetValue := Value;
+```
+
+---
+
+# 8. Add() — Sayısal Artırma
+
+```pascal
+METHOD Add
+VAR_INPUT
+    Amount : INT;
+END_VAR
+
+IF Amount > 0 THEN
+    Total := Total + Amount;
+END_IF
+```
+
+---
+
+# 9. CheckLimits() — Limit Kontrolü
+
+```pascal
+METHOD CheckLimits : BOOL
+IF (Value < Min) OR (Value > Max) THEN
+    Error := TRUE;
+    CheckLimits := FALSE;
+ELSE
+    CheckLimits := TRUE;
+END_IF
+```
+
+---
+
+# 10. IsDone() — Süreç Tamam mı?
+
+```pascal
+METHOD IsDone : BOOL
+IsDone := (Position >= TargetPos);
+```
+
+---
+
+# 11. Calibrate() — Sensör Kalibrasyonu
+
+```pascal
+METHOD Calibrate
+Offset := SensorRaw - ReferenceValue;
+IsCalibrated := TRUE;
+```
+
+---
+
+# 12. SafetyCheck() — Güvenlik Denetimi
+
+```pascal
+METHOD SafetyCheck : BOOL
+IF EmergencyStop THEN
+    Error := TRUE;
+    SafetyCheck := FALSE;
+ELSE
+    SafetyCheck := TRUE;
+END_IF
+```
+
+---
+
+# 13. Filter() — Basit Sensör Filtresi (EMA)
+
+```pascal
+METHOD Filter : REAL
+VAR_INPUT
+    NewSample : REAL;
+END_VAR
+
+Filter := (NewSample * Alpha) + (PrevValue * (1 - Alpha));
+PrevValue := Filter;
+```
+
+---
+
+# 14. RisingEdge() — Kenar Algılama
+
+```pascal
+METHOD RisingEdge : BOOL
+RisingEdge := Input AND NOT PrevInput;
+PrevInput := Input;
+```
+
+---
+
+# 15. TimeoutCheck() — Zaman Aşımı Kontrolü
+
+```pascal
+METHOD TimeoutCheck : BOOL
+TimeoutCheck := (TIME() - StartTime) > Timeout;
+```
+
+---
+
+# 16. SpeedBasedIncrement() — RPM Tabanlı Sayım
+
+```pascal
+METHOD UpdateFromRpm : UDINT
+VAR_INPUT
+    RPM : REAL;
+END_VAR
+VAR
+    PulsePerSecond : REAL;
+    Now : LTIME;
+END_VAR
+
+PulsePerSecond := (RPM) / 60.0;
+
+IF PulsePerSecond > 0 THEN
+    Interval := TIME#1S / PulsePerSecond;
+ELSE
+    Interval := T#10S;
+END_IF
+
+Now := TIME64();
+
+IF (Now - LastTime) >= LTIME(Interval) THEN
+    Count := Count + 1;
+    LastTime := Now;
+END_IF
+
+UpdateFromRpm := Count;
+```
+
+---
+
+# 17. TimeFilteredIncrement() — Zaman Filtreli Sayım
+
+```pascal
+METHOD IncrementFiltered : UDINT
+VAR_INPUT
+    Signal : BOOL;
+END_VAR
+VAR
+    Now : LTIME;
+END_VAR
+
+IF RisingEdgeDetected THEN
+    StartTime := TIME64();
+END_IF
+
+Now := TIME64();
+
+IF Signal AND ((Now - StartTime) >= LTIME(MinPulseTime)) THEN
+    Count := Count + 1;
+    StartTime := Now + LTIME#1S;
+END_IF
+
+IncrementFiltered := Count;
+```
+
+---
+
+# 18. DeadbandIncrement() — Deadband Tabanlı Sayım
+
+```pascal
+METHOD DeadbandUpdate : UDINT
+VAR_INPUT
+    InputValue : REAL;
+END_VAR
+
+IF ABS(InputValue - PrevValue) > Deadband THEN
+    Count := Count + 1;
+    PrevValue := InputValue;
+END_IF
+
+DeadbandUpdate := Count;
+```
+
+---
+
+# 19. EMABasedUpdate() — EMA + Sayaç
+
+```pascal
+METHOD UpdateEMA : UDINT
+VAR_INPUT
+    Signal : BOOL;
+END_VAR
+
+NewSample := SEL(Signal, 0.0, 1.0);
+EMAValue := Alpha * NewSample + (1 - Alpha) * EMAValue;
+
+IF EMAValue >= Threshold THEN
+    Count := Count + 1;
+    EMAValue := 0.0;
+END_IF
+
+UpdateEMA := Count;
+```
+
+---
+
+# 20. PIDTimeBasedIncrement() — PID ile Zaman Tabanlı Sayım
+
+```pascal
+METHOD PIDIncrement : UDINT
+
+fbPID(SetPoint := SetPoint, ProcessValue := PV, bEnable := TRUE);
+PIDOutput := fbPID.Output;
+
+Interval := TIME#500MS - TIME#4MS * PIDOutput;
+
+IF Interval < T#20MS THEN
+    Interval := T#20MS;
+END_IF
+
+IF (TIME64() - LastTime) >= LTIME(Interval) THEN
+    Count := Count + 1;
+    LastTime := TIME64();
+END_IF
+
+PIDIncrement := Count;
+```
+
+---
+
+
+
 
 
 
