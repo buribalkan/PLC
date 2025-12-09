@@ -695,6 +695,249 @@ Bu doküman, gerçek fabrika ortamlarında kullanılan **endüstri standardı bi
 
 ---
 
+# 📘 TwinCAT – FULL BATCH OPERATIONS PIPELINE  
+### *Gerçek Dünya İçin Tam Kapsamlı Mühendislik Eğitimi (Batch Processing)*  
+---
+
+# 🏭 1. Giriş – Batch Operations Nedir?
+
+Endüstriyel üretimde **batch**, belirli bir üretim döngüsünde toplanan verilerin  
+tek bir işlem grubu (lot) olarak değerlendirilmesidir.
+
+Batch operasyonları aşağıdakilerde yaygın olarak kullanılır:
+
+- Dolum makineleri  
+- Karışım (mixing) sistemleri  
+- Gıda–kimya prosesleri  
+- Test–kalite kontrol istasyonları  
+- Ölçüm toplama sistemleri  
+- Enerji ve proses analiz hatları  
+
+Bir batch işleminde tipik olarak:
+
+1. Veri toplanır  
+2. Filtrelenir  
+3. Hesaplanır  
+4. İstatistik üretilir  
+5. Limit kontrol yapılır  
+6. Batch sonuçları paketlenir  
+7. Batch kapanır ve bir yenisi başlar  
+
+Bu doküman, TwinCAT üzerinde **uçtan uca profesyonel batch processing pipeline** oluşturan kapsamlı bir mühendislik setidir.
+
+---
+
+# 🎯 2. Batch Pipeline İçeriği
+
+Bu eğitim, aşağıdaki bileşenleri içerir:
+
+- Batch başlatma / bitirme mekanizması  
+- Sensörlerden veri toplama  
+- Değer filtreleme (opsiyonel)  
+- Batch içi istatistik hesaplama  
+- Min / max / avg / std dev  
+- Limit & alarm kontrolü  
+- Batch sonuçlarını saklama  
+- Batch ID yönetimi  
+- Zaman damgası oluşturma  
+- Batch tamamlama raporu  
+
+---
+
+# 🧱 3. Batch Veri Yapısı – ST_BatchResult
+
+```pascal
+TYPE ST_BatchResult :
+STRUCT
+    BatchID        : UDINT;
+    StartTime      : DT;
+    EndTime        : DT;
+
+    Count          : UDINT;
+    Sum            : LREAL;
+    Avg            : LREAL;
+    Min            : LREAL;
+    Max            : LREAL;
+    StdDev         : LREAL;
+
+    HighLimitHits  : UDINT;
+    LowLimitHits   : UDINT;
+
+    Completed      : BOOL;
+END_STRUCT
+END_TYPE
+```
+
+---
+
+# 🧱 4. Batch Geçici Hafıza Yapısı – ST_BatchTemp
+
+```pascal
+TYPE ST_BatchTemp :
+STRUCT
+    Values     : ARRAY[1..10000] OF LREAL; // maksimum batch boyutu
+    Index      : UDINT;
+    Sum        : LREAL;
+    SumSq      : LREAL;
+END_STRUCT
+END_TYPE
+```
+
+---
+
+# 🔧 5. FULL BATCH OPERATION FUNCTION BLOCK
+
+```pascal
+FUNCTION_BLOCK FB_BatchProcessor
+VAR_INPUT
+    rInputValue   : LREAL;
+    bAddValue     : BOOL;       // batch'e yeni değer ekle
+    bStartBatch   : BOOL;       // yeni batch başlat
+    bEndBatch     : BOOL;       // batch bitir
+    rHighLimit    : LREAL := 90.0;
+    rLowLimit     : LREAL := 10.0;
+END_VAR
+
+VAR_OUTPUT
+    stResult : ST_BatchResult;
+END_VAR
+
+VAR
+    stTemp : ST_BatchTemp;
+END_VAR
+```
+
+---
+
+# 🟦 6. Batch Başlatma
+
+```pascal
+IF bStartBatch THEN
+    stTemp.Index := 0;
+    stTemp.Sum   := 0;
+    stTemp.SumSq := 0;
+
+    stResult.BatchID := stResult.BatchID + 1;
+    stResult.StartTime := DT#1970-01-01-00:00:00 + TOD_TO_DT(TOD());
+    stResult.Completed := FALSE;
+END_IF
+```
+
+---
+
+# 🟩 7. Batch’e Veri Ekleme
+
+```pascal
+IF bAddValue THEN
+    stTemp.Index := stTemp.Index + 1;
+    stTemp.Values[stTemp.Index] := rInputValue;
+    stTemp.Sum   := stTemp.Sum + rInputValue;
+    stTemp.SumSq := stTemp.SumSq + (rInputValue * rInputValue);
+
+    IF rInputValue > rHighLimit THEN
+        stResult.HighLimitHits := stResult.HighLimitHits + 1;
+    END_IF
+    IF rInputValue < rLowLimit THEN
+        stResult.LowLimitHits := stResult.LowLimitHits + 1;
+    END_IF
+END_IF
+```
+
+---
+
+# 🟥 8. Batch Bitirme + İstatistik Hesaplama
+
+```pascal
+IF bEndBatch AND stTemp.Index > 0 THEN
+    stResult.EndTime := DT#1970-01-01-00:00:00 + TOD_TO_DT(TOD());
+
+    stResult.Count := stTemp.Index;
+    stResult.Sum   := stTemp.Sum;
+    stResult.Avg   := stTemp.Sum / stTemp.Index;
+
+    // Min / Max hesaplama
+    stResult.Min := stTemp.Values[1];
+    stResult.Max := stTemp.Values[1];
+
+    FOR i := 2 TO stTemp.Index DO
+        IF stTemp.Values[i] < stResult.Min THEN stResult.Min := stTemp.Values[i]; END_IF;
+        IF stTemp.Values[i] > stResult.Max THEN stResult.Max := stTemp.Values[i]; END_IF;
+    END_FOR
+
+    // Std deviation
+    stResult.StdDev :=
+        SQRT( (stTemp.SumSq / stTemp.Index) - (stResult.Avg * stResult.Avg) );
+
+    stResult.Completed := TRUE;
+END_IF
+```
+
+---
+
+# 🔵 9. Kullanım Örneği – MAIN Program
+
+```pascal
+PROGRAM MAIN
+VAR
+    fbBatch : FB_BatchProcessor;
+    rSensor : LREAL;
+    bNewSample : BOOL;
+    bStart : BOOL;
+    bEnd   : BOOL;
+END_VAR
+
+// sensörden okunan değer
+rSensor := 45.3;
+
+// batch başlayacak
+bStart := TRUE;
+
+// her döngüde yeni sample ekle
+bNewSample := TRUE;
+
+fbBatch(
+    rInputValue := rSensor,
+    bAddValue   := bNewSample,
+    bStartBatch := bStart,
+    bEndBatch   := bEnd
+);
+
+// batch sonlandır
+bEnd := TRUE;
+```
+
+---
+
+# 📊 10. Batch Pipeline Özeti
+
+| Adım | Açıklama |
+|------|----------|
+| 1 | Batch başlatma |
+| 2 | Veri toplama |
+| 3 | Limit kontrol |
+| 4 | Toplam & kareler toplamı |
+| 5 | Min / Max bulma |
+| 6 | Ortalama hesaplama |
+| 7 | Standart sapma hesaplama |
+| 8 | Batch kapatma |
+| 9 | Sonuç raporunu üretme |
+
+---
+
+# 🧪 11. Gerçek Dünya Kullanım Senaryoları
+
+### ✔ Dolum makineleri batch dolum analizi  
+### ✔ Test istasyonlarında batch kalite kontrol  
+### ✔ Enerji kayıt sistemlerinde batch ölçüm  
+### ✔ Tartım & Loadcell batch operasyonları  
+### ✔ ISO 9001 süreçlerinde parti takibi  
+### ✔ Pastörizasyon, karıştırma, pişirme prosesleri  
+
+Bu pipeline endüstriyel otomasyon sektöründe standarttır.
+
+---
+
+
 
 
 
