@@ -533,6 +533,192 @@ Bu senaryo sayesinde:
 
 ---
 
+# Konveyör Bant Üzerinde Kamera Tabanlı Kalite Kontrol Sistemi  
+## METHOD Kullanımı İçin Kod İçermeyen Senaryo Dokümanı
+
+---
+
+# 1. Senaryo: Konveyör Üzerinde Kamera Tabanlı Kalite Kontrol
+
+Bu sistemde ürünler konveyör üzerinden geçer ve kamera/sensör sistemi kalite kontrolü yapar.  
+Sistem görevleri:
+
+1. Ürünü algılamak  
+2. Kamerayı tetiklemek  
+3. Görüntüyü analiz etmek  
+4. Ürünü PASS/FAIL olarak sınıflandırmak  
+5. Hatalı ürünleri banttan ayırmak  
+6. Sayım ve raporlama yapmak  
+
+Bu doküman, sistemi **methodlarla mantıksal olarak tasarlamayı** açıklar.
+
+---
+
+# 2. Kullanılacak Methodlar ve Mantıksal Gerekçeleri
+
+---
+
+## 2.1 DetectProduct()  
+**Amaç:** Ürünün konveyöre girişini tespit etmek.
+
+### Neden method?
+- Sadece ürün algılamaya odaklıdır.  
+- Sensör gürültüsü, titreşim, arka plan etkileri burada filtrelenir.  
+
+### Mantık:
+- Sensör sinyali değerlendirilir  
+- Ürün “gerçek” olarak algılanmışsa süreç başlar  
+- Ürün giriş zamanı kaydedilir  
+
+---
+
+## 2.2 TriggerCamera()  
+**Amaç:** Kamerayı doğru anda tetiklemek.
+
+### Neden method?
+- Kamera tetiklemesi milisaniye hassasiyeti gerektirir.  
+- Ürün tam hizadayken tetiklenmelidir.  
+
+### Mantık:
+- Kamera tetik sinyali gönderilir  
+- Exposure süreci başlatılır  
+- Kamera hazır/boşta durumu değerlendirilir  
+
+---
+
+## 2.3 AnalyzeImage()  
+**Amaç:** Alınan görüntüyü işleme algoritmasına iletmek.
+
+### Neden method?
+- Görüntü işleme süreci karmaşıktır ve diğer süreçlerden ayrılmalıdır.  
+- Algoritma değişirse yalnızca bu method güncellenir.  
+
+### Mantık:
+- Görüntü işleme başlatılır  
+- Süre ve performans izlenir  
+- Algoritmanın ürettiği skor alınır  
+
+---
+
+## 2.4 Classify()  
+**Amaç:** Analiz sonucu ürünün PASS/FAIL kararını vermek.
+
+### Neden method?
+- Kalite karar mantığı merkezi olmalıdır.  
+- Eşik değerler (threshold) buradan yönetilir.  
+
+### Mantık:
+- Skor > eşik → PASS  
+- Skor ≤ eşik → FAIL  
+
+---
+
+## 2.5 ActuateRejector()  
+**Amaç:** Hatalı ürünleri bant dışına atmak.
+
+### Neden method?
+- Ayırma mekanizması (piston, flap vb.) fiziksel bir eylemdir.  
+- Risk içerir ve zamanlama kritiktir.  
+- Fail logic’i bu methodda izole edilmelidir.  
+
+### Mantık:
+- Fail ürünün konuma gelmesi için gecikme hesaplanır  
+- Rejector mekanizması tetiklenir  
+- Güvenlik kontrolleri yapılır  
+
+---
+
+## 2.6 UpdateCounters()  
+**Amaç:** İstatistiksel sayım değerlerini güncellemek.
+
+### Neden method?
+- PASS/FAIL/Toplam sayılar birçok süreçte kullanılabilir.  
+- Sayım mekanizması analizden bağımsız olmalıdır.  
+
+### Mantık:
+- Toplam ürün sayısı artırılır  
+- PASS veya FAIL sayısı güncellenir  
+
+---
+
+## 2.7 LogResult()  
+**Amaç:** Her ürünün sonuçlarını kayıt altına almak.
+
+### Neden method?
+- İzlenebilirlik (traceability) gereksinimdir.  
+- Endüstriyel kalite sistemlerinde zorunludur.  
+
+### Mantık:
+- Zaman damgası  
+- PASS/FAIL sonucu  
+- Kamera ID  
+- Ölçüm değerleri  
+
+---
+
+## 2.8 ResetSystem()  
+**Amaç:** Hata sonrası sistemi temiz başlangıç durumuna getirmek.
+
+### Neden method?
+- Hatalarda tüm state’ler tutarlı şekilde sıfırlanmalıdır.  
+
+### Mantık:
+- Sayaçlar sıfırlanabilir  
+- Alarm durumları temizlenir  
+- Mekanik eyleyiciler güvenli konuma getirilir  
+
+---
+
+# 3. Methodların Birlikte Çalışma Akışı (Mantıksal Süreç)
+
+```
+DetectProduct()
+↓
+TriggerCamera()
+↓
+AnalyzeImage()
+↓
+Classify()
+↓
+   PASS → UpdateCounters()
+   FAIL → ActuateRejector() → UpdateCounters()
+↓
+LogResult()
+```
+
+Hata olması durumunda:
+
+```
+ResetSystem()
+```
+
+---
+
+# 4. Tasarımın Sağladığı Avantajlar
+
+| Fayda | Açıklama |
+|------|----------|
+| Modülerlik | Her davranış ayrı methodla yönetilir |
+| Test Edilebilirlik | Her method bağımsız test edilebilir |
+| Okunabilirlik | Karmaşık süreçler sade ve anlaşılır olur |
+| Esneklik | Algoritma veya donanım değiştiğinde sadece ilgili method güncellenir |
+| Güvenlik | Rejector gibi riskli mekanizmalar merkezi kontrol edilir |
+| İzlenebilirlik | Tüm kalite süreci sistematik olarak loglanır |
+
+---
+
+# 5. Sonuç
+
+Bu senaryo, METHOD kullanımı için mükemmel bir gerçek dünya örneğidir çünkü:
+
+- Her method tek bir sorumluluk taşır (Single Responsibility)  
+- Davranış odaklı bir tasarım ortaya çıkar  
+- Sonradan geliştirilebilirlik en üst seviyededir  
+- Hem PLC hem de nesne yönelimli programlama mantığıyla uyumludur  
+
+---
+
+
 
 
 
