@@ -410,5 +410,292 @@ Bu pipeline, endüstriyel veri işleme için **çok güçlü, ölçeklenebilir v
 
 ---
 
+# 📘 TwinCAT – FULL SENSOR HANDLING PIPELINE  
+### *Gerçek Dünya İçin Tam Kapsamlı Mühendislik Eğitimi (Uçtan Uca Sensör İşleme)*  
+---
+
+# 🏭 1. Giriş – Sensor Handling Nedir?
+
+Endüstriyel otomasyon sistemlerinde sensörler:
+
+- Gürültülü veri üretir  
+- Bazen hatalı çalışır  
+- Bazı durumlarda donma (stuck-at value) gösterir  
+- Zamanla drift (kayma) oluşur  
+- Ölçüm aralıkları doğrusal değildir  
+- Saha kablosu kopabilir veya kısa devre olabilir  
+
+Bu nedenle sensörlerden gelen ham veri doğrudan kullanılmaz.  
+Gerçek dünyada sensör verisi, **çok katmanlı bir işleme pipeline’ından** geçirilerek güvenli hâle getirilir.
+
+Bu doküman, TwinCAT üzerinde **profesyonel makine mühendisliği standardında** bir *FULL SENSOR HANDLING PIPELINE* öğretir.
+
+---
+
+# 🎯 2. Sensor Pipeline Bileşenleri
+
+Aşağıdaki adımlar uçtan uca bir veri işleme sistemi oluşturur:
+
+1. **Raw Data Acquisition** (Ham veri alma)  
+2. **Debounce / Signal Stabilization**  
+3. **Clamping & Limiting**  
+4. **Scaling**  
+5. **Offset + Gain Calibration**  
+6. **Lookup Table Linearization**  
+7. **Filtering**  
+   - Moving Average  
+   - EMA (Exponential Moving Average)  
+   - Median Filter  
+8. **Fault Detection**  
+   - Cable break  
+   - Sensor short  
+   - Stuck-at value  
+   - Out-of-Range detection  
+9. **Drift Compensation**  
+10. **Rate-of-Change (ROC) Safety Check**  
+11. **Hysteresis-Based Alarm Logic**  
+12. **Structured Output Data Packaging**  
+
+Bu pipeline günümüz PLC yazılımlarında standarttır.
+
+---
+
+# 🧱 3. Sonuç Yapısı – ST_SensorPacket
+
+Tüm işlenmiş veriler tek bir struct içinde tutulur.
+
+```pascal
+TYPE ST_SensorPacket :
+STRUCT
+    RawValue        : LREAL;
+    StableValue     : LREAL;
+    ScaledValue     : LREAL;
+    CalibratedValue : LREAL;
+    LinearizedValue : LREAL;
+    FilteredValue   : LREAL;
+
+    IsShortCircuit  : BOOL;
+    IsCableBreak    : BOOL;
+    IsFrozen        : BOOL;
+    IsOutOfRange    : BOOL;
+
+    AlarmActive     : BOOL;
+    ROC_Exceeded    : BOOL;
+
+    FilterHistory   : ARRAY[1..10] OF LREAL;
+END_STRUCT
+END_TYPE
+```
+
+---
+
+# 🧰 4. Lookup Table Calibration
+
+```pascal
+VAR_GLOBAL CONSTANT
+    aLUT : ARRAY[0..100] OF LREAL := [
+        0.0, 0.4, 0.9, 1.5, 2.2, 3.0 (* ... *)
+    ];
+END_VAR
+```
+
+Linearization, sensörün üreticiden gelen karakteristiğini doğrultmak için kullanılır.
+
+---
+
+# 🔧 5. FULL SENSOR HANDLING FUNCTION BLOCK
+
+Tüm pipeline tek FB içinde uygulanır.
+
+```pascal
+FUNCTION_BLOCK FB_SensorHandler
+VAR_INPUT
+    rInput                   : LREAL;
+    rMin                     : LREAL := 4.0;   // 4-20mA sensör alt sınır
+    rMax                     : LREAL := 20.0;  // üst sınır
+    rScaleMin                : LREAL := 0.0;
+    rScaleMax                : LREAL := 100.0;
+    rAlarmThreshold          : LREAL := 80.0;
+    rROC_Limit               : LREAL := 15.0;
+END_VAR
+
+VAR_OUTPUT
+    stOut : ST_SensorPacket;
+END_VAR
+
+VAR
+    rPrevValue : LREAL;
+    i          : INT;
+END_VAR
+```
+
+---
+
+# 🟦 6. Adım 1 – Ham Veri Alma
+
+```pascal
+stOut.RawValue := rInput;
+```
+
+---
+
+# 🟩 7. Adım 2 – Debounce / Stabilization
+
+Sinyal belirli bir döngü boyunca değişmezse kararlı (stable) kabul edilir.
+
+```pascal
+IF ABS(stOut.RawValue - stOut.StableValue) < 0.01 THEN
+    // sabit
+ELSE
+    stOut.StableValue := stOut.RawValue;
+END_IF
+```
+
+---
+
+# 🟥 8. Adım 3 – Clamping & Limiting
+
+```pascal
+IF rInput < rMin THEN
+    stOut.IsOutOfRange := TRUE;
+    stOut.StableValue := rMin;
+ELSIF rInput > rMax THEN
+    stOut.IsOutOfRange := TRUE;
+    stOut.StableValue := rMax;
+END_IF
+```
+
+---
+
+# 🟨 9. Adım 4 – Scaling (4–20mA → 0–100 arası)
+
+```pascal
+stOut.ScaledValue :=
+    (stOut.StableValue - rMin) / (rMax - rMin) * (rScaleMax - rScaleMin)
+    + rScaleMin;
+```
+
+---
+
+# 🟧 10. Adım 5 – Calibration (Offset + Gain)
+
+```pascal
+stOut.CalibratedValue := (stOut.ScaledValue + 0.2) * 1.05; // örnek
+```
+
+---
+
+# 🟪 11. Adım 6 – Lookup Table Linearization
+
+```pascal
+VAR
+    idx : INT;
+END_VAR
+
+idx := LIMIT(0, INT(stOut.CalibratedValue), 100);
+stOut.LinearizedValue := aLUT[idx];
+```
+
+---
+
+# 🔵 12. Adım 7 – Moving Average Filter
+
+```pascal
+FOR i := 9 DOWNTO 1 DO
+    stOut.FilterHistory[i+1] := stOut.FilterHistory[i];
+END_FOR
+
+stOut.FilterHistory[1] := stOut.LinearizedValue;
+
+VAR rSum : LREAL := 0;
+
+FOR i := 1 TO 10 DO
+    rSum := rSum + stOut.FilterHistory[i];
+END_FOR
+
+stOut.FilteredValue := rSum / 10;
+```
+
+---
+
+# 🟤 13. Adım 8 – Sensor Fault Detection
+
+### Kablo kopması (4 mA altına düşmüş)
+```pascal
+stOut.IsCableBreak := (rInput < 3.5);
+```
+
+### Kısa devre (20 mA üstüne çıkmış)
+```pascal
+stOut.IsShortCircuit := (rInput > 21.0);
+```
+
+### Donma (değer uzun süre değişmiyor)
+
+```pascal
+stOut.IsFrozen := (ABS(stOut.FilteredValue - rPrevValue) < 0.0001);
+rPrevValue := stOut.FilteredValue;
+```
+
+---
+
+# 🔺 14. Adım 9 – Rate-of-Change (ROC) Protection
+
+```pascal
+IF ABS(stOut.FilteredValue - rPrevValue) > rROC_Limit THEN
+    stOut.ROC_Exceeded := TRUE;
+END_IF
+```
+
+---
+
+# 🚨 15. Adım 10 – Hysteresis’li Alarm
+
+```pascal
+IF stOut.FilteredValue > rAlarmThreshold THEN
+    stOut.AlarmActive := TRUE;
+ELSIF stOut.FilteredValue < (rAlarmThreshold - 5.0) THEN
+    stOut.AlarmActive := FALSE;
+END_IF
+```
+
+---
+
+# 🧪 16. Kullanım Örneği
+
+```pascal
+PROGRAM MAIN
+VAR
+    fbSensor : FB_SensorHandler;
+    rRawInput : LREAL := 12.5;
+END_VAR
+
+fbSensor(rInput := rRawInput);
+```
+
+---
+
+# 🏆 17. Full Sensor Pipeline Özeti
+
+| Adım | Açıklama |
+|------|----------|
+| 1 | Ham veri alma |
+| 2 | Debounce & stabilizasyon |
+| 3 | Clamping / limit kontrol |
+| 4 | Scaling |
+| 5 | Offset + gain calibration |
+| 6 | Lookup Table linearization |
+| 7 | Filtreleme (MA) |
+| 8 | Sensor fault detection |
+| 9 | Rate of Change kontrolü |
+| 10 | Alarm yönetimi |
+| 11 | Çıktı struct paketleme |
+
+Bu doküman, gerçek fabrika ortamlarında kullanılan **endüstri standardı bir sensör işleme pipeline’ıdır**.
+
+---
+
+
+
 
 
