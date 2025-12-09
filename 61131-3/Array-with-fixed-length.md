@@ -1105,10 +1105,6 @@ Endüstride LUT en sık kullanılan optimizasyon tekniklerindendir.
 
 ---
 
-# 📁 Dosya Bilgisi
-Bu dosya TwinCAT eğitim setine uygun olarak hazırlanmıştır ve diğer modüllerle birebir uyumludur.
-
----
 
 
 
