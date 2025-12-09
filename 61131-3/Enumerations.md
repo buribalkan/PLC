@@ -327,7 +327,5 @@ Enum burada FB’nin **state engine** yapısını oluşturur.
 
 ---
 
- 
 
-olarak da düzenlenebilir.
 
