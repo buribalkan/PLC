@@ -221,8 +221,8 @@ Motor.SetSpeed(1000);
 
 ---
 
-# TwinCAT PLC – METHOD Mermaid Diyagramları Eğitim Paketi  
-## (Tamamı Mermaid Tabanlı Görsel Açıklamalar)
+# TwinCAT PLC – METHOD Mermaid Diyagramları (Github Uyumlu)
+## Tüm Diyagramlar Düzeltilmiş Hatasız Versiyon
 
 ---
 
@@ -231,8 +231,8 @@ Motor.SetSpeed(1000);
 ```mermaid
 classDiagram
     class FB_Motor {
-        -INT Speed
-        -BOOL Running
+        -Speed : INT
+        -Running : BOOL
         +Start()
         +Stop()
         +SetSpeed(NewSpeed : INT)
@@ -246,12 +246,12 @@ classDiagram
 
 ```mermaid
 flowchart TD
-    A[Program Başlangıcı] --> B[FB_Motor instance oluştur]
-    B --> C[Start() çağır]
-    C --> D[SetSpeed(1000) çağır]
-    D --> E{Running = TRUE?}
+    A[Program başlatıldı] --> B[Motor nesnesi oluşturuldu]
+    B --> C[Start methodu çağrıldı]
+    C --> D[SetSpeed 1000 ile çağrıldı]
+    D --> E{Motor çalışıyor mu?}
     E -->|Evet| F[Motor çalışıyor]
-    E -->|Hayır| G[Hata: Start başarısız]
+    E -->|Hayır| G[Motor çalışmıyor]
 ```
 
 ---
@@ -260,17 +260,17 @@ flowchart TD
 
 ```mermaid
 sequenceDiagram
-    participant MAIN as MAIN Program
+    participant MAIN as Main Program
     participant MOTOR as FB_Motor
 
     MAIN->>MOTOR: Start()
-    MOTOR-->>MAIN: Running := TRUE
+    MOTOR-->>MAIN: Running flag updated
 
     MAIN->>MOTOR: SetSpeed(500)
-    MOTOR-->>MAIN: Speed := 500
+    MOTOR-->>MAIN: Speed updated
 
     MAIN->>MOTOR: IsRunning()
-    MOTOR-->>MAIN: TRUE
+    MOTOR-->>MAIN: true
 ```
 
 ---
@@ -279,11 +279,11 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    A[SetSpeed(NewSpeed)] --> B{NewSpeed 0-3000 arası mı?}
-    B -->|Evet| C[Speed := NewSpeed]
-    B -->|Hayır| D[Error := TRUE]
-    C --> E[Method Sonu]
-    D --> E[Method Sonu]
+    A[SetSpeed çağrıldı] --> B{Yeni hız 0-3000 arası mı?}
+    B -->|Evet| C[Speed güncellendi]
+    B -->|Hayır| D[Error flag aktif]
+    C --> E[Bitti]
+    D --> E[Bitti]
 ```
 
 ---
@@ -298,8 +298,8 @@ stateDiagram-v2
     Running --> Idle : StopCmd
 
     state Running {
-        [*] --> ExecuteMethod
-        ExecuteMethod --> ExecuteMethod : Motor.Update()
+        [*] --> Execute
+        Execute --> Execute : Update method çağrılır
     }
 ```
 
@@ -310,13 +310,13 @@ stateDiagram-v2
 ```mermaid
 classDiagram
     class FB_Counter {
-        -INT Count
+        -Count : INT
         +Increment() BOOL
         +SetValue(value : INT) BOOL
         +GetValue() INT
     }
 
-    note for FB_Counter "Private değişken (Count) sadece methodlar üzerinden yönetilir."
+    note for FB_Counter "Count sadece methodlar üzerinden değiştirilebilir."
 ```
 
 ---
@@ -325,15 +325,13 @@ classDiagram
 
 ```mermaid
 flowchart TD
-    A[Start()] --> B[Running := TRUE]
-    B --> C[Speed := 500]
-    C --> D{Speed < 500 mü?}
-    D -->|Evet| E[Hata: Low Speed]
-    D -->|Hayır| F[Başarılı Start]
+    A[Start method çağrıldı] --> B[Running true yapılır]
+    B --> C[Speed 500 yapılır]
+    C --> D{Speed 500 mü?}
+    D -->|Evet| E[Başarılı başlangıç]
+    D -->|Hayır| F[Hata: düşük hız]
 ```
 
 ---
-
-
 
 
