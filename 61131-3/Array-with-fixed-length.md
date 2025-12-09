@@ -561,6 +561,310 @@ TwinCAT’te array’ler **modern PLC mimarisinin temelidir**.
 
 ---
 
+# 📘 TwinCAT ARRAY Formülleri – Tam Kapsamlı Eğitim Dokümanı
+
+Bu doküman, TwinCAT'te ARRAY’ler ile kullanılan **tüm yaygın matematiksel, filtreleme, arama ve veri işleme formüllerini** profesyonel ve tam kapsamlı şekilde açıklar.  
+Gerçek dünya uygulamalarında kullanılan tüm örnekler dahildir.
+
+---
+
+# 🚀 1. ARRAY Toplamı (Sum)
+
+```pascal
+rSum := 0.0;
+
+FOR i := 0 TO nMax DO
+    rSum := rSum + aData[i];
+END_FOR
+```
+
+---
+
+# 🚀 2. Ortalama (Arithmetic Mean)
+
+```pascal
+rSum := 0.0;
+
+FOR i := 0 TO nMax DO
+    rSum := rSum + aData[i];
+END_FOR
+
+rAvg := rSum / (nMax + 1);
+```
+
+---
+
+# 🚀 3. Maksimum Değer (MAX)
+
+```pascal
+rMax := aData[0];
+
+FOR i := 1 TO nMax DO
+    IF aData[i] > rMax THEN
+        rMax := aData[i];
+    END_IF
+END_FOR
+```
+
+---
+
+# 🚀 4. Minimum Değer (MIN)
+
+```pascal
+rMin := aData[0];
+
+FOR i := 1 TO nMax DO
+    IF aData[i] < rMin THEN
+        rMin := aData[i];
+    END_IF
+END_FOR
+```
+
+---
+
+# 🚀 5. Hareketli Ortalama (Moving Average)
+
+```pascal
+aSamples[nIdx] := rNewValue;
+
+nIdx := nIdx + 1;
+IF nIdx > nMax THEN nIdx := 0; END_IF;
+
+rSum := 0.0;
+
+FOR i := 0 TO nMax DO
+    rSum := rSum + aSamples[i];
+END_FOR
+
+rFiltered := rSum / (nMax + 1);
+```
+
+---
+
+# 🚀 6. Ağırlıklı Ortalama (Weighted Average)
+
+```pascal
+rWeightedSum := 0.0;
+rWeightTotal := 0.0;
+
+FOR i := 0 TO nMax DO
+    rWeightedSum := rWeightedSum + (aData[i] * aWeights[i]);
+    rWeightTotal := rWeightTotal + aWeights[i];
+END_FOR
+
+rResult := rWeightedSum / rWeightTotal;
+```
+
+---
+
+# 🚀 7. Varyans (Variance) ve Standart Sapma (Standard Deviation)
+
+### Ortalama
+```pascal
+rSum := 0;
+
+FOR i := 0 TO nMax DO
+    rSum := rSum + aData[i];
+END_FOR
+
+rAvg := rSum / (nMax + 1);
+```
+
+### Varyans
+```pascal
+rVariance := 0;
+
+FOR i := 0 TO nMax DO
+    rVariance := rVariance + (aData[i] - rAvg) * (aData[i] - rAvg);
+END_FOR
+
+rVariance := rVariance / (nMax + 1);
+```
+
+### Standart Sapma
+```pascal
+rStdDev := SQRT(rVariance);
+```
+
+---
+
+# 🚀 8. Lookup Table (TABLO ARAMASI)
+
+```pascal
+rOutput := aLookup[nIndex];
+```
+
+---
+
+# 🚀 9. Dizi Arama (Find Element)
+
+```pascal
+bFound := FALSE;
+
+FOR i := 0 TO nMax DO
+    IF aData[i] = value THEN
+        bFound := TRUE;
+        EXIT;
+    END_IF
+END_FOR
+```
+
+---
+
+# 🚀 10. Diziyi Temizleme (Reset)
+
+```pascal
+FOR i := 0 TO nMax DO
+    aData[i] := 0;
+END_FOR
+```
+
+---
+
+# 🚀 11. Shift Register (Sağa Kaydırma)
+
+```pascal
+FOR i := nMax DOWNTO 1 DO
+    aData[i] := aData[i-1];
+END_FOR
+```
+
+---
+
+# 🚀 12. Shift Left (Sola Kaydırma)
+
+```pascal
+FOR i := 0 TO nMax-1 DO
+    aData[i] := aData[i+1];
+END_FOR
+```
+
+---
+
+# 🚀 13. Reverse Array (Tersine Çevirme)
+
+```pascal
+FOR i := 0 TO nMax DO
+    aTemp[i] := aData[nMax - i];
+END_FOR
+```
+
+---
+
+# 🚀 14. Dizi Kopyalama (Copy Array)
+
+```pascal
+FOR i := 0 TO nMax DO
+    aDest[i] := aSource[i];
+END_FOR
+```
+
+---
+
+# 🚀 15. Normalize Etme (0–1 Aralığına Ölçekleme)
+
+```pascal
+rMin := 999999;
+rMax := -999999;
+
+// Min-Max bul
+FOR i := 0 TO nMax DO
+    IF aData[i] < rMin THEN rMin := aData[i]; END_IF
+    IF aData[i] > rMax THEN rMax := aData[i]; END_IF
+END_FOR
+
+// Normalize et
+FOR i := 0 TO nMax DO
+    aNorm[i] := (aData[i] - rMin) / (rMax - rMin);
+END_FOR
+```
+
+---
+
+# 🚀 16. 2D Matris Toplamı
+
+```pascal
+rSum := 0;
+
+FOR x := 1 TO nRows DO
+    FOR y := 1 TO nCols DO
+        rSum := rSum + aMatrix[x,y];
+    END_FOR
+END_FOR
+```
+
+---
+
+# 🚀 17. 2D Satır Toplamı
+
+```pascal
+rRowSum := 0;
+
+FOR y := 1 TO nCols DO
+    rRowSum := rRowSum + aMatrix[nRow, y];
+END_FOR
+```
+
+---
+
+# 🚀 18. 2D Sütun Toplamı
+
+```pascal
+rColSum := 0;
+
+FOR x := 1 TO nRows DO
+    rColSum := rColSum + aMatrix[x, nCol];
+END_FOR
+```
+
+---
+
+# 🚀 19. En Yakın Değer (Closest Value)
+
+```pascal
+rClosest := aData[0];
+
+FOR i := 1 TO nMax DO
+    IF ABS(aData[i] - rTarget) < ABS(rClosest - rTarget) THEN
+        rClosest := aData[i];
+    END_IF
+END_FOR
+```
+
+---
+
+# 🚀 20. Threshold Üstü Eleman Sayısı (Threshold Count)
+
+```pascal
+nCount := 0;
+
+FOR i := 0 TO nMax DO
+    IF aData[i] > rThreshold THEN
+        nCount := nCount + 1;
+    END_IF
+END_FOR
+```
+
+---
+
+# 🎉 Özet
+
+Bu doküman ARRAY yapıları üzerinde kullanılan tüm matematiksel ve kontrol algoritmalarını içerir:
+
+- Toplama, ortalama, max/min  
+- Moving average, weighted average  
+- Variance & std deviation  
+- Shift register  
+- Lookup table  
+- Normalize  
+- 2D matris işlemleri  
+- Threshold analizleri  
+
+TwinCAT ile veri işleme, kontrol algoritmaları ve endüstriyel sistemlerde ARRAY formülleri kritik rol oynar.
+
+---
+
+
 
 
 
