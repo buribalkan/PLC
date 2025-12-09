@@ -332,6 +332,208 @@ flowchart TD
     D -->|Hayır| F[Hata: düşük hız]
 ```
 
+# Otomatik Doldurma Makinesi – METHOD Kullanımı Senaryo Dokümanı  
+## (Kod içermeyen, sadece mantık odaklı açıklama)
+
 ---
+
+# 1. Senaryo: Otomatik Doldurma (Dozajlama) Makinesi
+
+Bu sistemin temel görevleri:
+
+1. Depodan sıvı çekmek  
+2. Dolum vanasını açmak  
+3. Şişeyi hedef seviyeye kadar doldurmak  
+4. Aşırı dolumu engellemek  
+5. Dolumu tamamlayıp vanayı kapatmak  
+6. Bir sonraki şişeye geçmek  
+
+Bu süreç bir **Function Block (FB)** içinde methodlar kullanılarak yönetilir.  
+Her method, sistemin farklı bir davranışını temsil eder.
+
+---
+
+# 2. Kullanılacak Methodlar ve Seçim Mantığı
+
+---
+
+## 2.1 Initialize()  
+**Amacı:** Sistemi bilinen ve güvenli bir başlangıç durumuna getirmek.
+
+**Neden bir method?**  
+- Sistem açıldığında tüm değişkenler tek noktadan düzenlenmelidir.  
+- Başlangıç aşaması farklı modüllerin hazırlanmasını içerir.  
+
+**Mantık:**  
+- Seviye sensörü sıfırlanır  
+- Vana kapalı mı kontrol edilir  
+- Alarm bayrakları temizlenir  
+- Sayaçlar ve durumlar resetlenir  
+
+---
+
+## 2.2 StartFilling()  
+**Amacı:** Dolum sürecini başlatmak.
+
+**Neden bir method?**  
+Doluma geçmek bağımsız bir eylemdir. Bu eylemin:
+
+- Güvenlik kontrolleri  
+- Başlangıç ayarları  
+- Loglama  
+- Durum değişiklikleri  
+
+gibi adımları vardır.
+
+**Mantık:**  
+- Vana açılır  
+- “Dolum aktif” durumu set edilir  
+- Tank seviyesi ve sistem uygunluğu doğrulanır  
+
+---
+
+## 2.3 StopFilling()  
+**Amacı:** Dolum sürecini güvenli şekilde durdurmak.
+
+**Neden bir method?**  
+Dolumu durdurmak ile başlatmak tamamen farklı süreçlerdir. Ayrı method olması:
+
+- Okunabilirliği artırır  
+- Güvenliği merkezi hale getirir  
+- Test etmeyi kolaylaştırır  
+
+**Mantık:**  
+- Vana kapatılır  
+- Süre hesaplanır  
+- Durum pasif yapılır  
+- Log kaydı tutulabilir  
+
+---
+
+## 2.4 UpdateLevel()  
+**Amacı:** Seviye sensöründen gelen ham veriyi anlamlı hale getirmek.
+
+**Neden bir method?**  
+Seviye okuma genellikle:
+
+- Filtre gerektirir  
+- Gürültü azaltma mantığı içerir  
+- Sensör doğrulama gerektirir  
+
+Bu yüzden ayrı bir davranış olarak tanımlanmalıdır.
+
+**Mantık:**  
+- Sensör değerini al  
+- Filtre uygula (EMA, deadband vb.)  
+- Sistem içinde güncel seviyeyi sakla  
+
+---
+
+## 2.5 IsFull()  
+**Amacı:** Şişenin ya da tankın hedef seviyeye ulaşıp ulaşmadığını belirlemek.
+
+**Neden bir method?**  
+Bu karar başka birçok yerde kullanılabilir.  
+Karar kuralları zamanla değişebilir ama method arayüzü değişmez.
+
+**Mantık:**  
+- Güncel seviye hedef ile karşılaştırılır  
+- Tolerans uygulanabilir  
+- Gerekirse aşırı dolum kontrolü yapılır  
+
+---
+
+## 2.6 SafetyCheck()  
+**Amacı:** Güvenliğin merkezden kontrol edilmesini sağlamak.
+
+**Neden bir method?**  
+Güvenlik kuralları:
+
+- Farklı yerlerde dağınık olursa
+- Sistemin davranışı öngörülemez olur
+
+Tüm güvenlik logiği tek noktada olmalıdır.
+
+**Mantık:**  
+- Seviye çok hızlı artıyorsa kaçak kontrolü yapılır  
+- Tankta sıvı yoksa dolum durdurulur  
+- Sensör hatalarında alarm üretilir  
+- Maksimum süre aşılırsa hata verilir  
+
+---
+
+## 2.7 ResetAlarms()  
+**Amacı:** Operatör müdahalesinden sonra sistemi tekrar hazır duruma getirmek.
+
+**Neden bir method?**  
+Alarm resetleme:
+
+- Güvenlik gerektirir  
+- Tek bir standarda oturtulmalıdır  
+
+**Mantık:**  
+- Alarm bayraklarını temizle  
+- Sistem durumunu default hale getir  
+
+---
+
+# 3. Genel Süreç Akışı (Methodların Birlikte Kullanımı)
+
+Aşağıdaki süreç methodların nasıl birlikte çalıştığını gösterir:
+
+```
+Initialize()
+↓
+StartFilling()
+↓
+Loop:
+   UpdateLevel()
+   SafetyCheck()
+   if IsFull() → StopFilling()
+↓
+ResetAlarms()
+```
+
+Her method, sistemin ayrı bir davranışını kontrol eder:
+
+- **Initialize()** → Başlangıç hazırlığı  
+- **StartFilling()** → Süreç başlangıcı  
+- **UpdateLevel()** → Sürekli izleme  
+- **SafetyCheck()** → Sürekli koruma  
+- **IsFull()** → Karar verme  
+- **StopFilling()** → Süreç sonlandırma  
+- **ResetAlarms()** → Hata sonrası toparlama  
+
+---
+
+# 4. Neden Bu Method Yapısı Doğru?
+
+| Method | Mantık | Sağladığı Fayda |
+|--------|--------|------------------|
+| Initialize() | Açılış kontrolü | Temiz başlangıç |
+| StartFilling() | Süreç tetikleme | Net davranış ayrımı |
+| StopFilling() | Güvenli durdurma | Risk azaltma |
+| UpdateLevel() | Sensör işleme | Modülerlik |
+| IsFull() | Karar kontrolü | Tek sorumluluk |
+| SafetyCheck() | Güvenlik yönetimi | Merkezi kontrol |
+| ResetAlarms() | Hata toparlama | Standartlaşma |
+
+Bu yapı hem **TwinCAT FB mimarisine**, hem de **C# sınıf tasarım prensiplerine** tam uyumludur.
+
+---
+
+# 5. Sonuç
+
+Bu senaryo sayesinde:
+
+- METHOD kavramı gerçek bir endüstriyel proses üzerinden anlaşılır  
+- Hangi methodun *neden* seçildiği net şekilde görülür  
+- Behavior-based tasarım ortaya çıkar  
+- Kod yazmadan bile method tasarımı yapılabilir hale gelir  
+
+---
+
+
+
 
 
