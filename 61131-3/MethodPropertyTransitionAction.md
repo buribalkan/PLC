@@ -613,7 +613,347 @@ Unloading_Idle := Loaded = FALSE;
 Any_Fault := FaultDetected;
 ```
 
+# TwinCAT PLC – Tam Eğitim Paketi  
+## Egzersizler + Çözümler + Açıklamalı Şemalar + SFC Diyagramları  
+### (C# Karşılaştırmalı Öğrenme Seti)
+
 ---
+
+# 1. METHOD – Temel Seviye Egzersizler ve Çözümleri
+
+## Egzersiz 1 – Increment Method
+### Görev:
+- FB_Counter içinde Count değişkeni ve Increment() methodu yaz.
+
+### Çözüm:
+```pascal
+FUNCTION_BLOCK FB_Counter
+VAR
+    Count : INT := 0;
+END_VAR
+
+METHOD Increment : BOOL
+Count := Count + 1;
+Increment := TRUE;
+```
+
+### Açıklama Şeması:
+```
++---------------------+
+|     FB_Counter      |
+|---------------------|
+| Count : INT         |
+|---------------------|
+| Increment()         | → Count = Count + 1
++---------------------+
+```
+
+---
+
+## Egzersiz 2 – Parametre Alan Method
+### Görev:
+- SetValue(value) methodu ile Count güncelle.
+
+### Çözüm:
+```pascal
+METHOD SetValue : BOOL
+VAR_INPUT
+    value : INT;
+END_VAR
+
+IF value >= 0 THEN
+    Count := value;
+    SetValue := TRUE;
+ELSE
+    SetValue := FALSE;
+END_IF
+```
+
+---
+
+## Egzersiz 3 – Method Kullanımı
+### Çözüm:
+```pascal
+PROGRAM MAIN
+VAR
+    Cnt : FB_Counter;
+    Result : INT;
+END_VAR
+
+Cnt.Increment();
+Cnt.Increment();
+Cnt.Increment();
+Cnt.SetValue(10);
+Result := Cnt.Count;
+```
+
+---
+
+# 2. PROPERTY – Kapsülleme Mantığı
+
+## Egzersiz 4 – Speed Property
+### Çözüm:
+```pascal
+FUNCTION_BLOCK FB_Motor
+VAR
+    _Speed : INT;
+END_VAR
+
+PROPERTY Speed : INT
+GET
+    Speed := _Speed;
+END_GET
+
+SET
+IF (Value >= 0) AND (Value <= 3000) THEN
+    _Speed := Value;
+END_IF
+END_SET
+```
+
+### Açıklamalı Şema:
+```
++---------------------------+
+|        FB_Motor           |
+|---------------------------|
+|  _Speed (private)         |
+|---------------------------|
+|  PROPERTY Speed           |
+|   GET → return _Speed     |
+|   SET → limit 0–3000      |
++---------------------------+
+```
+
+---
+
+## Egzersiz 5 – IncreaseSpeed Method
+### Çözüm:
+```pascal
+METHOD IncreaseSpeed
+VAR_INPUT
+    step : INT;
+END_VAR
+
+_Speed := _Speed + step;
+
+IF _Speed > 3000 THEN
+    _Speed := 3000;
+END_IF
+```
+
+---
+
+# 3. ACTION & TRANSITION – SFC Yapısı
+
+## Egzersiz 6 – SFC Steps: Init → Heat → Ready
+
+### Actions:
+```pascal
+(* Act_Init *)
+Heater := FALSE;
+
+(* Act_Heat *)
+Heater := TRUE;
+
+(* Act_Ready *)
+LED := TRUE;
+```
+
+### SFC Diyagramı:
+```
+ [Init]
+    |
+    | StartCmd = TRUE
+    v
+ [Heat]
+    |
+    | Temp >= 80
+    v
+ [Ready]
+    |
+    | ResetCmd = TRUE
+    v
+ [Init]
+```
+
+---
+
+## Egzersiz 7 – Transition Koşulları
+### Çözüm:
+```pascal
+Transition_Init_Heat := StartCmd;
+Transition_Heat_Ready := (Temp >= 80);
+Transition_Ready_Init := ResetCmd;
+```
+
+---
+
+# 4. İleri Seviye: Motor FB + SFC
+
+## Egzersiz 8 – Motor Function Block
+
+### Çözüm:
+```pascal
+FUNCTION_BLOCK FB_Motor
+VAR
+    _Speed : INT;
+    Running : BOOL;
+    Error : BOOL;
+END_VAR
+
+METHOD Start
+Running := TRUE;
+_Speed := 500;
+
+METHOD Stop
+Running := FALSE;
+_Speed := 0;
+
+METHOD SetSpeed
+VAR_INPUT
+    NewSpeed : INT;
+END_VAR
+
+IF (NewSpeed >= 0) AND (NewSpeed <= 3000) THEN
+    _Speed := NewSpeed;
+ELSE
+    Error := TRUE;
+END_IF
+```
+
+### Açıklama Şeması:
+```
++--------------------------------+
+|           FB_Motor             |
+|--------------------------------|
+| _Speed : INT                   |
+| Running : BOOL                 |
+| Error : BOOL                   |
+|--------------------------------|
+| Start()   → Speed = 500        |
+| Stop()    → Speed = 0          |
+| SetSpeed()                     |
++--------------------------------+
+```
+
+---
+
+## Egzersiz 9 – Motor SFC
+
+### Actions:
+```pascal
+Act_Stopped:   Motor.Stop();
+Act_Starting:  Motor.Start();
+Act_Running:   Motor.SetSpeed(1000);
+Act_Stopping:  Motor.Stop();
+```
+
+### Transitions:
+```pascal
+Stopped_Starting := StartCmd;
+Starting_Running := (Motor._Speed >= 500);
+Running_Stopping := StopCmd;
+Stopping_Stopped := (Motor._Speed = 0);
+```
+
+### SFC Diyagramı:
+```
+  [Stopped]
+      |
+      | StartCmd
+      v
+  [Starting]
+      |
+      | Speed >= 500
+      v
+  [Running]
+      |
+      | StopCmd
+      v
+  [Stopping]
+      |
+      | Speed = 0
+      v
+  [Stopped]
+```
+
+---
+
+# 5. Uzman Seviye: Konveyör Sistemi
+
+## Egzersiz 10 – FB_Conveyor
+
+### Çözüm:
+```pascal
+FUNCTION_BLOCK FB_Conveyor
+VAR
+    _Speed : INT;
+    Loaded : BOOL;
+    Fault : BOOL;
+END_VAR
+
+PROPERTY Speed : INT
+GET
+    Speed := _Speed;
+END_GET
+SET
+IF (Value >= 0) AND (Value <= 100) THEN
+    _Speed := Value;
+END_IF
+END_SET
+
+METHOD Start
+_Speed := 50;
+
+METHOD Stop
+_Speed := 0;
+
+METHOD Load
+Loaded := TRUE;
+
+METHOD Unload
+Loaded := FALSE;
+
+METHOD SetSpeed
+VAR_INPUT
+    NewSpeed : INT;
+END_VAR
+IF (NewSpeed >= 0) AND (NewSpeed <= 100) THEN
+    _Speed := NewSpeed;
+ELSE
+    Fault := TRUE;
+END_IF
+```
+
+---
+
+## Konveyör SFC Diyagramı
+
+```
+     [Idle]
+        |
+        | ProductDetected
+        v
+     [Loading]
+        |
+        | Loaded = TRUE
+        v
+     [Running]
+        |
+        | DestinationReached
+        v
+     [Unloading]
+        |
+        | Loaded = FALSE
+        v
+     [Idle]
+
+ ANY STATE → [Fault] (FaultDetected = TRUE)
+```
+
+---
+
+
 
 
 
