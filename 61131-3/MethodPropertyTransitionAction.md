@@ -332,4 +332,288 @@ Sistemi class + state machine ile modelle.
 
 ---
 
+# TwinCAT PLC Egzersiz Çözümleri  
+## C# Karşılaştırmalı Çözüm Seti
+
+---
+
+# 1. Başlangıç Seviyesi Çözümler
+
+## Çözüm – Egzersiz 1: Increment Method
+```pascal
+FUNCTION_BLOCK FB_Counter
+VAR
+    Count : INT := 0;
+END_VAR
+
+METHOD Increment : BOOL
+Count := Count + 1;
+Increment := TRUE;
+```
+
+---
+
+## Çözüm – Egzersiz 2: SetValue Method
+```pascal
+METHOD SetValue : BOOL
+VAR_INPUT
+    value : INT;
+END_VAR
+
+IF value >= 0 THEN
+    Count := value;
+    SetValue := TRUE;
+ELSE
+    SetValue := FALSE;
+END_IF
+```
+
+---
+
+## Çözüm – Egzersiz 3: Method Kullanımı
+```pascal
+PROGRAM MAIN
+VAR
+    Cnt : FB_Counter;
+    Result : INT;
+END_VAR
+
+Cnt.Increment();
+Cnt.Increment();
+Cnt.Increment();
+Cnt.SetValue(10);
+Result := Cnt.Count;
+```
+
+---
+
+# 2. Orta Seviye: Property Çözümleri
+
+## Çözüm – Egzersiz 4: Speed Property
+```pascal
+FUNCTION_BLOCK FB_Motor
+VAR
+    _Speed : INT;
+END_VAR
+
+PROPERTY Speed : INT
+GET
+    Speed := _Speed;
+END_GET
+
+SET
+IF (Value >= 0) AND (Value <= 3000) THEN
+    _Speed := Value;
+END_IF
+END_SET
+```
+
+---
+
+## Çözüm – Egzersiz 5: IncreaseSpeed Method
+```pascal
+METHOD IncreaseSpeed
+VAR_INPUT
+    step : INT;
+END_VAR
+
+_Speed := _Speed + step;
+
+IF _Speed > 3000 THEN
+    _Speed := 3000;
+END_IF
+```
+
+---
+
+# 3. SFC – Action ve Transition Çözümleri
+
+## Çözüm – Egzersiz 6: Basit SFC Actions
+
+**Act_Init**
+```pascal
+Heater := FALSE;
+```
+
+**Act_Heat**
+```pascal
+Heater := TRUE;
+```
+
+**Act_Ready**
+```pascal
+LED := TRUE;
+```
+
+---
+
+## Çözüm – Egzersiz 7: Transition Koşulları
+
+```pascal
+(* Init → Heat *)
+Transition_Init_Heat := StartCmd;
+
+(* Heat → Ready *)
+Transition_Heat_Ready := (Temp >= 80);
+
+(* Ready → Init *)
+Transition_Ready_Init := ResetCmd;
+```
+
+---
+
+# 4. İleri Seviye FB + SFC Çözümleri
+
+## Çözüm – Egzersiz 8: Motor FB
+```pascal
+FUNCTION_BLOCK FB_Motor
+VAR
+    _Speed : INT;
+    Running : BOOL;
+    Error : BOOL;
+END_VAR
+
+METHOD Start
+Running := TRUE;
+_Speed := 500;
+
+METHOD Stop
+Running := FALSE;
+_Speed := 0;
+
+METHOD SetSpeed
+VAR_INPUT
+    NewSpeed : INT;
+END_VAR
+
+IF (NewSpeed >= 0) AND (NewSpeed <= 3000) THEN
+    _Speed := NewSpeed;
+ELSE
+    Error := TRUE;
+END_IF
+```
+
+---
+
+## Çözüm – Egzersiz 9: Motor SFC
+
+**Actions**
+
+Act_Stopped:
+```pascal
+Motor.Stop();
+```
+
+Act_Starting:
+```pascal
+Motor.Start();
+```
+
+Act_Running:
+```pascal
+Motor.SetSpeed(1000);
+```
+
+Act_Stopping:
+```pascal
+Motor.Stop();
+```
+
+**Transitions**
+```pascal
+Stopped_Starting := StartCmd;
+Starting_Running := (Motor._Speed >= 500);
+Running_Stopping := StopCmd;
+Stopping_Stopped := (Motor._Speed = 0);
+```
+
+---
+
+# 5. Uzman Seviyesi: Konveyör Sistemi Çözümü
+
+## Çözüm – Egzersiz 10: FB_Conveyor
+```pascal
+FUNCTION_BLOCK FB_Conveyor
+VAR
+    _Speed : INT;
+    Loaded : BOOL;
+    Fault : BOOL;
+END_VAR
+
+PROPERTY Speed : INT
+GET
+    Speed := _Speed;
+END_GET
+SET
+IF (Value >= 0) AND (Value <= 100) THEN
+    _Speed := Value;
+END_IF
+END_SET
+
+METHOD Start
+_Speed := 50;
+
+METHOD Stop
+_Speed := 0;
+
+METHOD Load
+Loaded := TRUE;
+
+METHOD Unload
+Loaded := FALSE;
+
+METHOD SetSpeed
+VAR_INPUT
+    NewSpeed : INT;
+END_VAR
+IF (NewSpeed >= 0) AND (NewSpeed <= 100) THEN
+    _Speed := NewSpeed;
+ELSE
+    Fault := TRUE;
+END_IF
+```
+
+---
+
+# SFC Çözümleri
+
+**Actions:**
+
+Act_Idle
+```pascal
+Motor := FALSE;
+```
+
+Act_Loading
+```pascal
+Loader := TRUE;
+```
+
+Act_Running
+```pascal
+Motor := TRUE;
+```
+
+Act_Unloading
+```pascal
+Unloader := TRUE;
+```
+
+Act_Fault
+```pascal
+FaultLED := TRUE;
+```
+
+**Transitions:**
+```pascal
+Idle_Loading := ProductDetected;
+Loading_Running := Loaded = TRUE;
+Running_Unloading := DestinationReached;
+Unloading_Idle := Loaded = FALSE;
+Any_Fault := FaultDetected;
+```
+
+---
+
+
 
